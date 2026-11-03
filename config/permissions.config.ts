@@ -115,13 +115,33 @@ export const permissions = [
   {
     key: "procurement.manage",
     module: "Procurement",
-    description: "Manage procurement activities",
+    description: "Manage vendors, requisitions, quotations and purchase orders",
+  },
+  {
+    key: "procurement.po.approve",
+    module: "Procurement",
+    description: "Approve purchase orders",
+  },
+  {
+    key: "procurement.receive",
+    module: "Procurement",
+    description: "Record goods receipts against purchase orders",
   },
 
   {
+    key: "finance.budget.manage",
+    module: "Finance",
+    description: "Set and track department budgets",
+  },
+  {
     key: "finance.invoice.verify",
     module: "Finance",
-    description: "Verify vendor invoices",
+    description: "Enter and verify vendor invoices",
+  },
+  {
+    key: "finance.invoice.approve",
+    module: "Finance",
+    description: "Approve verified invoices for payment",
   },
   {
     key: "finance.payment.manage",
@@ -130,9 +150,14 @@ export const permissions = [
   },
 
   {
+    key: "maintenance.report",
+    module: "Maintenance",
+    description: "Report hardware issues and track own tickets",
+  },
+  {
     key: "maintenance.manage",
     module: "Maintenance",
-    description: "Manage maintenance tickets",
+    description: "Assign, work on and close maintenance tickets",
   },
 
   {

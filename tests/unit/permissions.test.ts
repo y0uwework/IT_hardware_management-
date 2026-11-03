@@ -9,9 +9,10 @@ describe("permission catalogue", () => {
     expect(new Set(PERMISSION_KEYS).size).toBe(permissions.length);
   });
   it("every sidebar entry references a catalogue key", () => {
+    const keys = (p: string | readonly string[]) => (Array.isArray(p) ? p : [p]);
     for (const item of sidebarConfig) {
-      expect(PERMISSION_KEYS).toContain(item.permission);
-      for (const c of item.children ?? []) expect(PERMISSION_KEYS).toContain(c.permission);
+      for (const k of keys(item.permission)) expect(PERMISSION_KEYS).toContain(k);
+      for (const c of item.children ?? []) for (const k of keys(c.permission)) expect(PERMISSION_KEYS).toContain(k);
     }
   });
 });

@@ -41,7 +41,21 @@ async function loadAsset(tx: Tx, id: number) {
 }
 
 export async function registerAsset(user: AuthUser, input: AssetCreateInput, correlationId?: string) {
-  return withTransaction(async (tx) => {
+  return withTransaction((tx) => registerAssetInTx(tx, user, input, correlationId));
+}
+
+/**
+ * Register one serialized asset inside the caller's transaction (also used by goods receipt,
+ * which passes the purchase order line and vendor it came from).
+ */
+export async function registerAssetInTx(
+  tx: Tx,
+  user: AuthUser,
+  input: AssetCreateInput,
+  correlationId?: string,
+  source?: { purchaseOrderItemId: number; vendorId: number; reason: string }
+) {
+  {
     const category = await queryOne<{ name: string; isActive: boolean; isSerialized: boolean }>(
       tx,
       `SELECT name, is_active AS isActive, is_serialized AS isSerialized FROM dbo.hardware_categories WHERE id = @id`,
@@ -94,7 +108,11 @@ export async function registerAsset(user: AuthUser, input: AssetCreateInput, cor
       }
     ))!;
     const assetTag = `${appConfig.assetTagPrefix}-${String(asset.id).padStart(6, "0")}`;
-    await execute(tx, `UPDATE dbo.assets SET asset_tag = @assetTag WHERE id = @id`, { id: asset.id, assetTag });
+    await execute(
+      tx,
+      `UPDATE dbo.assets SET asset_tag = @assetTag, purchase_order_item_id = @poItemId, vendor_id = @vendorId WHERE id = @id`,
+      { id: asset.id, assetTag, poItemId: source?.purchaseOrderItemId ?? null, vendorId: source?.vendorId ?? null }
+    );
 
     await moveStock(tx, input.categoryId, input.warehouseId, 1, null, "quantityAvailable");
     await recordMovementRow(tx, {
@@ -103,9 +121,9 @@ export async function registerAsset(user: AuthUser, input: AssetCreateInput, cor
       assetId: asset.id,
       movementType: MOVEMENT_TYPE.RECEIPT,
       quantity: 1,
-      reason: "Asset registered",
-      referenceType: "asset",
-      referenceId: asset.id,
+      reason: source?.reason ?? "Asset registered",
+      referenceType: source ? "purchase_order_item" : "asset",
+      referenceId: source?.purchaseOrderItemId ?? asset.id,
       actorId: user.id,
     });
     await audit(tx, {
@@ -113,11 +131,11 @@ export async function registerAsset(user: AuthUser, input: AssetCreateInput, cor
       action: "asset.register",
       entityType: "asset",
       entityId: asset.id,
-      after: { assetTag, ...input },
+      after: { assetTag, ...input, ...source },
       correlationId,
     });
     return { id: asset.id, assetTag };
-  });
+  }
 }
 
 export async function updateAsset(user: AuthUser, id: number, input: AssetUpdateInput, correlationId?: string) {

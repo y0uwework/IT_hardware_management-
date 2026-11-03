@@ -4,6 +4,7 @@ import { Button } from "@/components/common/Button";
 import { Modal } from "@/components/common/Modal";
 import { Alert } from "@/components/common/States";
 import { api, ApiClientError } from "@/lib/client";
+import { downloadText } from "@/lib/download";
 import { appConfig } from "@/config/app.config";
 import { ITEM_SHEET_COLUMNS, REQUIRED_ITEM_SHEET_COLUMNS, itemSampleCsv, parseCsv, sheetRowsFromCsv, toCsv, type ItemSheetRow } from "@/lib/item-sheet";
 import type { CategoryOption } from "./types";
@@ -13,17 +14,6 @@ interface BulkResult {
   exists: number;
   failed: number;
   results: { row: number; code: string; name: string; status: "created" | "exists" | "error"; messages: string[] }[];
-}
-
-export function downloadText(filename: string, text: string, type = "text/csv;charset=utf-8") {
-  const url = URL.createObjectURL(new Blob([text], { type }));
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 export function downloadItemSample(categories: CategoryOption[]) {

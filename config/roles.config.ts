@@ -10,7 +10,7 @@
 
 import { PERMISSION_KEYS, type PermissionKey } from "./permissions.config";
 
-const EMPLOYEE_BASE: PermissionKey[] = ["dashboard.view", "request.create", "request.view", "asset.view"];
+const EMPLOYEE_BASE: PermissionKey[] = ["dashboard.view", "request.create", "request.view", "asset.view", "maintenance.report"];
 
 export const roles = {
   EMPLOYEE: {
@@ -42,9 +42,51 @@ export const roles = {
       "item.create",
       "item.edit",
       "item.bulk_upload",
+      "procurement.receive",
+      "maintenance.manage",
       "employee.view",
       "reports.view",
     ],
+  },
+  PROCUREMENT_OFFICER: {
+    name: "Procurement Officer",
+    description: "Vendors, requisitions, quotations, purchase orders and goods receipt",
+    defaultPermissions: [
+      ...EMPLOYEE_BASE,
+      "procurement.manage",
+      "procurement.receive",
+      "request.view.all",
+      "inventory.view",
+      "item.view",
+      "reports.view",
+    ],
+  },
+  FINANCE_OFFICER: {
+    name: "Finance Officer",
+    description: "Budgets, invoice entry and verification, payments",
+    defaultPermissions: [
+      ...EMPLOYEE_BASE,
+      "finance.budget.manage",
+      "finance.invoice.verify",
+      "finance.payment.manage",
+      "reports.view",
+    ],
+  },
+  FINANCE_MANAGER: {
+    name: "Finance Manager",
+    description: "Approves purchase orders and verified invoices",
+    defaultPermissions: [
+      ...EMPLOYEE_BASE,
+      "finance.budget.manage",
+      "finance.invoice.approve",
+      "procurement.po.approve",
+      "reports.view",
+    ],
+  },
+  TECHNICIAN: {
+    name: "Technician",
+    description: "Works on maintenance tickets",
+    defaultPermissions: [...EMPLOYEE_BASE, "maintenance.manage", "asset.view.all", "inventory.view"],
   },
   AUDITOR: {
     name: "Auditor",
