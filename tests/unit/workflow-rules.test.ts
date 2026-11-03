@@ -6,7 +6,7 @@ import {
   selectWorkflow,
   workflowMatches,
   type WorkflowCandidate,
-} from "../../server/services/workflow-rules";
+} from "../../modules/approvals/approvals.rules";
 
 const wf = (over: Partial<WorkflowCandidate>): WorkflowCandidate => ({
   id: 1,

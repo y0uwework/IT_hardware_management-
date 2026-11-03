@@ -1,20 +1,12 @@
 import { describe, expect, it } from "vitest";
-import {
-  documentTotals,
-  lineAmounts,
-  matchInvoice,
-  money,
-  outstanding,
-  parseSerials,
-  poStatusAfterReceipt,
-  slaBreached,
-  slaDueAt,
-  type MatchLine,
-} from "../../server/services/procurement-rules";
-import { fiscalYearOf, fiscalYearRange } from "../../config/app.config";
-import { INVOICE_STATUS, INVOICE_TRANSITIONS, MAINTENANCE_STATUS, MAINTENANCE_TRANSITIONS, PO_STATUS, PO_TRANSITIONS, canTransition } from "../../config/status.config";
-import { filterSidebar } from "../../lib/permissions";
-import { sidebarConfig } from "../../config/sidebar.config";
+import { documentTotals, lineAmounts, money } from "../../shared/money";
+import { parseSerials, poStatusAfterReceipt } from "../../modules/procurement/procurement.rules";
+import { matchInvoice, outstanding, type MatchLine } from "../../modules/finance/finance.rules";
+import { slaBreached, slaDueAt } from "../../modules/maintenance/maintenance.rules";
+import { fiscalYearOf, fiscalYearRange } from "../../shared/config/app.config";
+import { INVOICE_STATUS, INVOICE_TRANSITIONS, MAINTENANCE_STATUS, MAINTENANCE_TRANSITIONS, PO_STATUS, PO_TRANSITIONS, canTransition } from "../../shared/config/status.config";
+import { filterSidebar } from "../../shared/permissions";
+import { sidebarConfig } from "../../shared/config/sidebar.config";
 
 describe("money & line amounts", () => {
   it("rounds to paise", () => {

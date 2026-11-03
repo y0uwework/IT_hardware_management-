@@ -1,3 +1,1 @@
-import { approvalActionRoute } from "@/server/utils/approval-route";
-
-export default approvalActionRoute("approve");
+export { approvalsByIdApproveHandler as default } from "@/modules/approvals/approvals.api";

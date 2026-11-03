@@ -1,4 +1,4 @@
-import { statusTone, type StatusTone } from "@/config/status.config";
+import { statusTone, type StatusTone } from "@/shared/config/status.config";
 
 const tones: Record<StatusTone, string> = {
   success: "bg-[#DCFCE7] text-[#166534]",

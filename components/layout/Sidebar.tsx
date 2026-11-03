@@ -1,9 +1,9 @@
 import Link from "next/link";
 import { useRouter } from "next/router";
 import { HardDrive, X } from "lucide-react";
-import { sidebarConfig } from "@/config/sidebar.config";
-import { filterSidebar } from "@/lib/permissions";
-import { appConfig } from "@/config/app.config";
+import { sidebarConfig } from "@/shared/config/sidebar.config";
+import { filterSidebar } from "@/shared/permissions";
+import { appConfig } from "@/shared/config/app.config";
 import { sidebarIcons } from "./icons";
 
 function isActive(pathname: string, route: string) {

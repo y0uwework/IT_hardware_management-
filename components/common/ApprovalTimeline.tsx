@@ -1,5 +1,5 @@
-import { formatDate } from "@/lib/client";
-import { statusTone } from "@/config/status.config";
+import { formatDate } from "@/shared/client";
+import { statusTone } from "@/shared/config/status.config";
 
 export interface TimelineEntry {
   id: number;

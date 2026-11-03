@@ -1,18 +1,18 @@
 // npm run seed:dev  — LOCAL DEVELOPMENT ONLY.
 //
-// Creates demo users (only in a dev database) with a role from config/roles.config.ts
+// Creates demo users (only in a dev database) with a role from shared/config/roles.config.ts
 // and that role's default permissions (stored as permission IDs on the user), master data, a default approval workflow and some stock so the
 // request → approval → IT review → assignment → acknowledgement flow can be tried end to end.
 // Refuses to run when NODE_ENV=production or AUTH_MODE is not "dev".
 // Run `npm run seed` first to sync the permission catalogue.
 
-import { loadEnvFiles } from "../../config/db-config.mjs";
-import { closeDb, execute, getPool, query, queryOne } from "../../lib/db";
-import { loadAuthUser, serializePermissionIds } from "../../lib/auth";
-import { roles, type RoleKey } from "../../config/roles.config";
-import { registerAsset } from "../../server/services/asset.service";
-import { recordManualMovement } from "../../server/services/inventory.service";
-import { saveWorkflowVersion } from "../../server/services/admin.service";
+import { loadEnvFiles } from "../../shared/config/db-config.mjs";
+import { closeDb, execute, getPool, query, queryOne } from "../../shared/db";
+import { loadAuthUser, serializePermissionIds } from "../../shared/auth";
+import { roles, type RoleKey } from "../../shared/config/roles.config";
+import { registerAsset } from "../../modules/assets/assets.service";
+import { recordManualMovement } from "../../modules/inventory/inventory.service";
+import { saveWorkflowVersion } from "../../modules/admin/admin.service";
 
 loadEnvFiles();
 

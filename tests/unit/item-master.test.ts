@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { ITEM_SHEET_COLUMNS, itemSampleCsv, parseCsv, sheetRowsFromCsv, toCsv } from "../../lib/item-sheet";
-import { itemInputSchema } from "../../server/validators/item.validators";
+import { ITEM_SHEET_COLUMNS, itemSampleCsv, sheetRowsFromCsv } from "../../modules/items/items.sheet";
+import { parseCsv, toCsv } from "../../shared/csv";
+import { itemInputSchema } from "../../modules/items/items.validation";
 
 describe("parseCsv", () => {
   it("handles quotes, escaped quotes, embedded commas/newlines, CRLF and a BOM", () => {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { deriveRequestStatus, itemFulfilmentStatus, remainingToPlan, type ItemState } from "../../server/services/fulfilment-rules";
-import { REQUEST_STATUS } from "../../config/status.config";
+import { deriveRequestStatus, itemFulfilmentStatus, remainingToPlan, type ItemState } from "../../modules/requests/requests.rules";
+import { REQUEST_STATUS } from "../../shared/config/status.config";
 
 const item = (over: Partial<ItemState>): ItemState => ({
   quantity: 1,

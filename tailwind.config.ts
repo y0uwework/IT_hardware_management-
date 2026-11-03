@@ -3,7 +3,7 @@ import type { Config } from "tailwindcss";
 // Design tokens from DESIGN.md (ShopVibe).
 // Fuchsia "primary" is reserved for interactive elements only.
 const config: Config = {
-  content: ["./pages/**/*.{ts,tsx}", "./components/**/*.{ts,tsx}"],
+  content: ["./pages/**/*.{ts,tsx}", "./components/**/*.{ts,tsx}", "./modules/**/*.{ts,tsx}"],
   theme: {
     extend: {
       colors: {

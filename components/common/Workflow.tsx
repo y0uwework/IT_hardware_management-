@@ -1,6 +1,6 @@
 // Small building blocks shared by the procurement, finance and maintenance screens.
 import { useState } from "react";
-import { api, ApiClientError } from "@/lib/client";
+import { api, ApiClientError } from "@/shared/client";
 
 /** Label/value grid for detail pages. */
 export function InfoGrid({ items, cols = 3 }: { items: [string, React.ReactNode][]; cols?: 2 | 3 | 4 }) {

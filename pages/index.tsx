@@ -1,5 +1,5 @@
 import type { GetServerSideProps } from "next";
-import { getAuthUser } from "@/lib/auth";
+import { getAuthUser } from "@/shared/auth";
 
 export const getServerSideProps: GetServerSideProps = async ({ req }) => {
   const user = await getAuthUser(req);

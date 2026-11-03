@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { filterSidebar, hasPermission } from "../../lib/permissions";
-import { sidebarConfig } from "../../config/sidebar.config";
-import { PERMISSION_KEYS, permissions } from "../../config/permissions.config";
-import { ASSET_TRANSITIONS, REQUEST_STATUS, REQUEST_TRANSITIONS, canTransition } from "../../config/status.config";
+import { filterSidebar, hasPermission } from "../../shared/permissions";
+import { sidebarConfig } from "../../shared/config/sidebar.config";
+import { PERMISSION_KEYS, permissions } from "../../shared/config/permissions.config";
+import { ASSET_TRANSITIONS, REQUEST_STATUS, REQUEST_TRANSITIONS, canTransition } from "../../shared/config/status.config";
 
 describe("permission catalogue", () => {
   it("has unique keys", () => {

@@ -1,18 +1,18 @@
 // npm run seed
-// Synchronizes the permission catalogue from config/permissions.config.ts.
+// Synchronizes the permission catalogue from shared/config/permissions.config.ts.
 // - Inserts missing keys, updates module/description, preserves IDs.
 // - Never deletes permissions.
 // - When a key is inserted for the first time, it is granted to existing users whose role
-//   (config/roles.config.ts) includes it by default — e.g. adding item.* gives IT Admins and
+//   (shared/config/roles.config.ts) includes it by default — e.g. adding item.* gives IT Admins and
 //   Administrators access straight away. Permissions that already existed are never granted
 //   or revoked, so per-user adjustments made by an administrator are preserved.
 // - Safe to run repeatedly.
 
-import { loadEnvFiles } from "../config/db-config.mjs";
-import { closeDb, execute, getPool, query, queryOne } from "../lib/db";
-import { parsePermissionIds, serializePermissionIds } from "../lib/auth";
-import { permissions } from "../config/permissions.config";
-import { isRoleKey, roles } from "../config/roles.config";
+import { loadEnvFiles } from "../shared/config/db-config.mjs";
+import { closeDb, execute, getPool, query, queryOne } from "../shared/db";
+import { parsePermissionIds, serializePermissionIds } from "../shared/auth";
+import { permissions } from "../shared/config/permissions.config";
+import { isRoleKey, roles } from "../shared/config/roles.config";
 
 loadEnvFiles();
 

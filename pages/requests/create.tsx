@@ -1,18 +1,6 @@
-import { MainLayout, PageHeader } from "@/components/layout/MainLayout";
-import { RequestForm, emptyRequest } from "@/components/requests/RequestForm";
-import { withPageAuth, type ProtectedPageProps } from "@/lib/page-auth";
+import { withPageAuth } from "@/middlewares/page-auth";
 
+export { default } from "@/modules/requests/pages/RequestCreatePage";
+
+// Server-only: signs the user in from the session and checks the page permission.
 export const getServerSideProps = withPageAuth("request.create");
-
-export default function CreateRequestPage({ user, forbidden }: ProtectedPageProps) {
-  return (
-    <MainLayout user={user} title="New request" forbidden={forbidden}>
-      <PageHeader
-        title="New hardware request"
-        subtitle="Tell us what you need. Your request goes through approval, then IT checks stock."
-        breadcrumbs={[{ label: "Requests", href: "/requests" }, { label: "New" }]}
-      />
-      <RequestForm initial={emptyRequest()} />
-    </MainLayout>
-  );
-}

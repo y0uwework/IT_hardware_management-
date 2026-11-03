@@ -2,7 +2,7 @@ import { ChevronLeft, ChevronRight, Search } from "lucide-react";
 import { useEffect, useState } from "react";
 import { LoadingState } from "./LoadingSpinner";
 import { EmptyState, ErrorState } from "./States";
-import type { PageMeta } from "@/lib/api-response";
+import type { PageMeta } from "@/shared/api-response";
 
 export interface Column<T> {
   key: string;

@@ -13,7 +13,7 @@ import {
   Wrench,
   type LucideIcon,
 } from "lucide-react";
-import type { SidebarIcon } from "@/config/sidebar.config";
+import type { SidebarIcon } from "@/shared/config/sidebar.config";
 
 /** Approved icon map. Config icon names resolve only through this table. */
 export const sidebarIcons: Record<SidebarIcon, LucideIcon> = {

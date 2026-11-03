@@ -1,8 +1,8 @@
-# Hardware Management System (HMS)
+# Assets  Management System (HMS)
 
 Next.js (Pages Router) + TypeScript + Tailwind on Microsoft SQL Server, using plain
 parameterized SQL through `mssql` (no ORM) and numbered `.sql` migrations.
-It manages IT hardware end to end: employee request → approval → IT review → stock
+It manages IT Assets  end to end: employee request → approval → IT review → stock
 reservation or procurement (quotations, purchase order, goods receipt) → assignment and
 acknowledgement → invoices and payments → maintenance → return, with reports across all of it.
 See `doc/PRD.md` for the full blueprint and `doc/DESIGN.md` for the visual system.
@@ -39,7 +39,7 @@ Developer or Express, or the `mcr.microsoft.com/mssql/server` container).
 cp .env.example .env.local      # set the DB_* values and SESSION_SECRET
 npm install
 npm run migrate                 # creates IT_Assest_manager if missing, applies database/migrations
-npm run seed                    # syncs config/permissions.config.ts → permissions table
+npm run seed                    # syncs shared/config/permissions.config.ts → permissions table
 npm run seed:dev                # DEV ONLY: demo users, roles, workflow, items, stock
 npm run dev
 ```
@@ -63,7 +63,7 @@ different user → *Record payment*.
 
 ## Roles
 
-Roles live in `config/roles.config.ts` (not in the database). Assigning a role copies its
+Roles live in `shared/config/roles.config.ts` (not in the database). Assigning a role copies its
 default permissions to the user; they can then be adjusted per user.
 
 | Role | Main access |
@@ -93,39 +93,88 @@ an invoice can't be approved by the person who verified it.
 | `npm run seed:dev` | Demo data. Refuses unless `AUTH_MODE=dev` and not production |
 | `npm run typecheck` / `npm test` / `npm run build` | Quality gates |
 
-**After adding a permission** to `config/permissions.config.ts`, run `npm run seed` — the
+**After adding a permission** to `shared/config/permissions.config.ts`, run `npm run seed` — the
 sidebar and API checks read permissions from the database, so a new menu stays hidden
 until it is synced.
 
-## Architecture
+## Architecture — modules
+
+The code is organised by **business module**. Each module owns its API handlers, service,
+validation, types and UI; reusable UI lives in `components/`, reusable code in `shared/`,
+and request middleware in `middlewares/`.
 
 ```
-pages/            UI pages (getServerSideProps → withPageAuth) and pages/api/v1/* thin route handlers
-  procurement/    requisitions, quotations, purchase-orders, goods-receipts, vendors
-  finance/        invoices, payments, budgets
-  maintenance/    ticket list + detail
-  masters/        item master
-  reports/        report runner
-components/       common/ (Button, FormField, DataTable, Modal, StatusBadge, Workflow helpers, …),
-                  layout/, requests/, assets/, items/
-config/           permissions · roles · sidebar · status (statuses + transitions) · app (prefixes,
-                  tax rates, SLA hours, fiscal year, …)
-server/
-  middleware/     withApi (authn, permission, origin check, error mapping) · authorize
-  services/       request · approval · inventory · asset · item · procurement · finance ·
-                  maintenance · reports · admin · dashboard · notification
-                  workflow-rules / fulfilment-rules / procurement-rules (pure, unit-tested)
-  validators/     zod schemas
-  utils/          sql-columns, audit, numbering (PR-/PO-/GRN-/INV-/PAY-/MT-YYYY-NNNNNN)
-lib/              db (pool + query helpers), auth (integration point), session, api-response,
-                  client helpers, item-sheet (CSV), download
-config/db-config.mjs  connection settings from DB_* env vars (shared by the app, migrations and seeds)
+modules/
+  <module>/
+    <module>.api.ts          API route handlers (one named export per route)
+    <module>.service.ts      business logic + SQL (server only)
+    <module>.validation.ts   zod schemas for request bodies / query strings
+    <module>.types.ts        types (inferred inputs, domain types)
+    <module>.rules.ts        pure rules, unit-tested (where the module has them)
+    pages/                   the module's screens (React components)
+      components/            UI used only by this module (forms, modals, panels)
+
+  auth            login / logout / current user
+  dashboard       dashboard
+  requests        Assets  requests, IT review, fulfilment rules
+  approvals       approval tasks, workflow routing rules
+  assets          asset register, assignment, return, my assets
+  inventory       stock, reservations, movements
+  items           item master (+ CSV bulk upload: items.sheet.ts)
+  procurement     vendors, requisitions, quotations, purchase orders, goods receipts
+  finance         budgets, invoices (3-way match), payments
+  maintenance     tickets, SLA
+  reports         report registry + runner
+  notifications   in-app notifications
+  admin           roles view, user access, workflows, master data, audit log
+
+components/       reusable UI: common/ (Button, FormField, DataTable, Modal, StatusBadge,
+                  Workflow helpers, …) and layout/ (MainLayout, Sidebar, Header)
+shared/           reusable code: db, auth, session, api-response, client (browser fetch),
+                  errors, validation (parse + shared field schemas), permissions, money, csv,
+                  download, audit, numbering, sql-columns, logger
+  config/         permissions · roles · sidebar · status (statuses + transitions) · app
+                  (prefixes, tax rates, SLA hours, fiscal year, …) · db-config.mjs
+middlewares/      authenticate (withApi: authn, permission, origin check, error mapping),
+                  authorize (permission helpers), page-auth (withPageAuth for pages)
+pages/            Next.js routes only — thin files, no logic (see below)
 database/         migrations/NNNN_name.sql, seed.ts, dev/seed-dev.ts, create-app-login.sql
 scripts/          migrate.mjs (migration runner)
-doc/              PRD.md, DESIGN.md
-docs/             schema-mapping.md
+tests/unit/       vitest unit tests
+doc/              PRD.md, DESIGN.md · docs/ schema-mapping.md
 ```
 
+### Why `pages/` still exists
+
+Next.js (Pages Router) only creates routes from files in the root `pages/` folder, and it
+only strips server code (`getServerSideProps` and what it imports, e.g. the SQL driver) from
+the browser bundle when that code is **in the `pages/` file itself**. So each route file is a
+few lines that point at the module:
+
+```ts
+// pages/finance/payments.tsx
+import { withPageAuth } from "@/middlewares/page-auth";
+export { default } from "@/modules/finance/pages/PaymentsPage";
+export const getServerSideProps = withPageAuth(["finance.payment.manage", "finance.invoice.approve"]);
+
+// pages/api/v1/payments/index.ts
+export { paymentsHandler as default } from "@/modules/finance/finance.api";
+```
+
+Rules of thumb:
+
+- **Never import a `*.service.ts`, `shared/db`, `shared/auth` or `middlewares/authenticate`
+  from a component in `modules/*/pages/`** — that pulls server code into the browser. Pages
+  talk to the server only through `/api/v1/*` (`shared/client`). Type-only imports are fine.
+- **Server code (`*.service.ts`, `*.rules.ts`, `*.validation.ts`, `shared/`) uses relative
+  imports**, so the seed scripts and unit tests can load it without the `@/` alias. UI code and
+  route files use `@/`.
+- **Adding a page:** create `modules/<m>/pages/XPage.tsx`, then `pages/<route>.tsx` with the
+  three lines above. **Adding an API route:** export `xHandler = withApi({...})` from
+  `<m>.api.ts`, validate with a schema from `<m>.validation.ts`, then add
+  `pages/api/v1/<route>.ts` re-exporting it. A route that needs `export const config`
+  (body size limit) keeps that line in its `pages/api` file — Next reads it from there.
+- Tailwind scans `pages/`, `components/` and `modules/` for class names.
 Key rules this code enforces:
 
 - **Server-side authorization everywhere.** Every API route declares a permission, and
@@ -136,9 +185,9 @@ Key rules this code enforces:
 - **Multi-table operations run in transactions.** Stock and asset changes use
   conditional `UPDATE … WHERE` statements, backed by filtered unique indexes and CHECK
   constraints, so concurrent reservations cannot oversell.
-- **Statuses only move along defined transitions** (`config/status.config.ts`) for
+- **Statuses only move along defined transitions** (`shared/config/status.config.ts`) for
   requests, assets, purchase orders, invoices and maintenance tickets.
-- **Money is `DECIMAL(18,2)`** and rounded consistently (`procurement-rules.money`).
+- **Money is `DECIMAL(18,2)`** and rounded consistently (`shared/money.ts`).
 - **Workflows are versioned.** Each request stores the version it used, and editing a
   workflow creates a new version.
 - **History is preserved.** Assignments are closed rather than deleted, items are
@@ -147,27 +196,27 @@ Key rules this code enforces:
 
 ## Configuration worth reviewing
 
-`config/app.config.ts` holds the business settings: document number prefixes, fiscal year
+`shared/config/app.config.ts` holds the business settings: document number prefixes, fiscal year
 start month (April), GST rates offered on lines, payment modes, invoice price tolerance,
 maintenance SLA hours per priority, repeat-issue window, item types and units of measure,
 and the bulk-upload row limit.
 
 ## Database access
 
-Request path: page → `fetch('/api/v1/...')` → route handler → service → `lib/db.ts` → SQL Server.
+Request path: page → `fetch('/api/v1/...')` → route file → `modules/<m>/<m>.api.ts` → `<m>.service.ts` → `shared/db.ts` → SQL Server.
 
-- `config/db-config.mjs` builds the connection from `DB_SERVER`, `DB_PORT`, `DB_DATABASE`
+- `shared/config/db-config.mjs` builds the connection from `DB_SERVER`, `DB_PORT`, `DB_DATABASE`
   (default `IT_Assest_manager`), `DB_AUTH` (`sql` or `windows`), `DB_USER`, `DB_PASSWORD`,
   `DB_ENCRYPT`, `DB_TRUST_SERVER_CERTIFICATE`. Named instances (`host\SQLEXPRESS`) work.
   Windows auth needs `npm install msnodesqlv8`.
-- `lib/db.ts` keeps one pool (survives dev hot reloads, never caches a failed connection) and
+- `shared/db.ts` keeps one pool (survives dev hot reloads, never caches a failed connection) and
   provides `query`, `queryOne`, `queryMany` (several SELECTs in one round trip), `execute`
   and `withTransaction`. Parameters are always bound; an array parameter expands for
   `IN (@ids)`. Aliases like `u.full_name AS [requester.fullName]` become nested objects, so
   the API keeps returning the same JSON shapes.
 - `next.config.js` lists the drivers in `serverExternalPackages` so Next loads them with
   Node's `require` instead of bundling them.
-- SQL errors map to API responses in `server/middleware/authenticate.ts`: unique-key and
+- SQL errors map to API responses in `middlewares/authenticate.ts`: unique-key and
   constraint violations → 409, connection failures → 503, anything else → 500 (logged).
 
 ## Migrations and the existing `users` table
@@ -182,7 +231,7 @@ constraints are named, and timestamps are UTC (`SYSUTCDATETIME()`).
 | Migration | Adds |
 |---|---|
 | 0001–0008 | Users/permissions, master data, workflows, requests, approvals, assets, inventory, notifications/audit |
-| 0009 | `item_master`; `hardware_request_items.item_id` |
+| 0009 | `item_master`; `Assets _request_items.item_id` |
 | 0010 | Vendors, requisitions, quotations, purchase orders, goods receipts; asset ↔ PO line/vendor link |
 | 0011 | Budgets, invoices (+ lines, events), payments |
 | 0012 | Maintenance tickets, activities, parts |

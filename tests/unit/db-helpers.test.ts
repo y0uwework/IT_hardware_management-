@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { Where, likeContains, nest } from "../../lib/db";
-import { categoryCols, itemCols } from "../../server/utils/sql-columns";
+import { Where, likeContains, nest } from "../../shared/db";
+import { categoryCols, itemCols } from "../../shared/sql-columns";
 
 describe("nest", () => {
   it("turns dotted aliases into nested objects", () => {

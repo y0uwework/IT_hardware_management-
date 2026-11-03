@@ -2,8 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/router";
 import { Bell, LogOut, Menu } from "lucide-react";
-import type { AuthUser } from "@/lib/auth";
-import { api, formatDate, useApi } from "@/lib/client";
+import type { AuthUser } from "@/shared/auth";
+import { api, formatDate, useApi } from "@/shared/client";
 
 interface NotificationRow {
   id: number;
