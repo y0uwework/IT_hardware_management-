@@ -4,7 +4,7 @@ import { Input, Textarea } from "@/components/common/FormField";
 import { Card } from "@/components/common/Card";
 import { Alert } from "@/components/common/States";
 import { api, ApiClientError } from "@/lib/client";
-import type { RequestDetail, RequestItem } from "./types";
+import { requestItemLabel, type RequestDetail, type RequestItem } from "./types";
 
 interface Availability {
   quantityAvailable: number;
@@ -124,7 +124,8 @@ export function ItReviewPanel({ request, onSaved }: { request: RequestDetail; on
             <div key={item.id} className="rounded-md border border-neutral-200 p-4">
               <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
                 <h3 className="font-headline text-base font-semibold">
-                  {item.quantity} × {item.category.name}
+                  {item.quantity} × {requestItemLabel(item)}
+                  {item.item && <span className="ml-2 text-caption font-normal text-neutral-500">{item.category.name}</span>}
                 </h3>
                 <span className="text-caption text-neutral-500">
                   {left} unplanned · {item.procurementQuantity} to procure · {item.fulfilledQuantity} delivered

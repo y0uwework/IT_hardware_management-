@@ -284,8 +284,9 @@ export async function getTask(user: AuthUser, taskId: number) {
      FROM dbo.hardware_requests r JOIN dbo.users u ON u.id = r.requester_user_id
      WHERE r.id = @requestId;
 
-     SELECT ${itemCols("i")}, c.name AS [category.name]
+     SELECT ${itemCols("i")}, c.name AS [category.name], im.item_code AS [item.code], im.item_name AS [item.name]
      FROM dbo.hardware_request_items i JOIN dbo.hardware_categories c ON c.id = i.category_id
+     LEFT JOIN dbo.item_master im ON im.id = i.item_id
      WHERE i.hardware_request_id = @requestId ORDER BY i.id;
 
      SELECT ${historyCols("h")}, u.full_name AS [actor.fullName]

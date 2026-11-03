@@ -8,6 +8,7 @@ export type SidebarIcon =
   | "Warehouse"
   | "Laptop"
   | "Boxes"
+  | "Package"
   | "ShoppingCart"
   | "Wallet"
   | "Wrench"
@@ -65,6 +66,20 @@ export const sidebarConfig: SidebarItem[] = [
     route: "/assets",
     icon: "Boxes",
     permission: "asset.view.all",
+  },
+  {
+    label: "Item Master",
+    route: "/masters/items",
+    icon: "Package",
+    permission: "item.view",
+    // More masters go here; the sub-menu appears once there are two or more.
+    children: [
+      {
+        label: "Item Master",
+        route: "/masters/items",
+        permission: "item.view",
+      },
+    ],
   },
   {
     label: "Procurement",

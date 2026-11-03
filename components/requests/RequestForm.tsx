@@ -15,10 +15,10 @@ export interface RequestFormValues {
   priority: string;
   requiredDate: string;
   costCentre: string;
-  items: { categoryId: string; quantity: string; requestedSpecification: string; estimatedUnitPrice: string }[];
+  items: { itemId: string; quantity: string; requestedSpecification: string; estimatedUnitPrice: string }[];
 }
 
-export const emptyItem = () => ({ categoryId: "", quantity: "1", requestedSpecification: "", estimatedUnitPrice: "" });
+export const emptyItem = () => ({ itemId: "", quantity: "1", requestedSpecification: "", estimatedUnitPrice: "" });
 
 export const emptyRequest = (): RequestFormValues => ({
   requestType: appConfig.requestTypes[0],
@@ -30,10 +30,13 @@ export const emptyRequest = (): RequestFormValues => ({
   items: [emptyItem()],
 });
 
-interface Category {
+interface ItemOption {
   id: number;
+  code: string;
   name: string;
   description: string | null;
+  standardCost: string | null;
+  category: { name: string };
 }
 
 export function RequestForm({ initial, requestId }: { initial: RequestFormValues; requestId?: number }) {
@@ -42,7 +45,7 @@ export function RequestForm({ initial, requestId }: { initial: RequestFormValues
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState<string | null>(null);
   const [saving, setSaving] = useState<"draft" | "submit" | null>(null);
-  const categories = useApi<Category[]>("/master-data/categories");
+  const itemOptions = useApi<ItemOption[]>("/items/options");
 
   const set = <K extends keyof RequestFormValues>(k: K, v: RequestFormValues[K]) => setValues((s) => ({ ...s, [k]: v }));
   const setItem = (i: number, patch: Partial<RequestFormValues["items"][number]>) =>
@@ -77,7 +80,18 @@ export function RequestForm({ initial, requestId }: { initial: RequestFormValues
     }
   }
 
-  const categoryOptions = (categories.data ?? []).map((c) => ({ value: c.id, label: c.name }));
+  const options = (itemOptions.data ?? []).map((o) => ({ value: o.id, label: `${o.name} (${o.code}) · ${o.category.name}` }));
+
+  // Picking an item fills in its default specification and price when those are still empty.
+  function chooseItem(i: number, itemId: string) {
+    const option = itemOptions.data?.find((o) => String(o.id) === itemId);
+    const current = values.items[i];
+    setItem(i, {
+      itemId,
+      requestedSpecification: current.requestedSpecification || option?.description || "",
+      estimatedUnitPrice: current.estimatedUnitPrice || option?.standardCost || "",
+    });
+  }
 
   return (
     <form onSubmit={(e) => save(true, e)} className="flex flex-col gap-6" noValidate>
@@ -157,14 +171,16 @@ export function RequestForm({ initial, requestId }: { initial: RequestFormValues
               <legend className="overline px-1">Item {i + 1}</legend>
               <div className="grid grid-cols-1 gap-4 md:grid-cols-12">
                 <Select
-                  label="Category"
+                  label="Item"
                   required
                   wrapperClassName="md:col-span-5"
-                  value={item.categoryId}
-                  onChange={(e) => setItem(i, { categoryId: e.target.value })}
-                  placeholder={categories.loading ? "Loading…" : "Choose a category"}
-                  options={categoryOptions}
-                  error={errors[`items.${i}.categoryId`]}
+                  value={item.itemId}
+                  onChange={(e) => chooseItem(i, e.target.value)}
+                  placeholder={
+                    itemOptions.loading ? "Loading…" : options.length ? "Choose an item" : "No items in the item master yet"
+                  }
+                  options={options}
+                  error={errors[`items.${i}.itemId`]}
                 />
                 <Input
                   label="Quantity"

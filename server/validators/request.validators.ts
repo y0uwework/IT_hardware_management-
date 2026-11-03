@@ -2,7 +2,8 @@ import { z } from "zod";
 import { appConfig } from "../../config/app.config";
 
 export const requestItemSchema = z.object({
-  categoryId: z.coerce.number().int().positive({ message: "Choose a hardware category" }),
+  // The item comes from the item master; its category is looked up on the server.
+  itemId: z.coerce.number({ invalid_type_error: "Choose an item" }).int().positive({ message: "Choose an item" }),
   quantity: z.coerce.number().int().min(1, "At least 1").max(500, "At most 500"),
   requestedSpecification: z.string().trim().min(3, "Describe what you need").max(4000),
   estimatedUnitPrice: z

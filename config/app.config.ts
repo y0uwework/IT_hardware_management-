@@ -11,6 +11,10 @@ export const appConfig = {
   requestTypes: ["New Asset", "Replacement", "Upgrade",] as const,
   priorities: ["Low", "Normal", "High", "Urgent"] as const,
   assetConditions: ["New", "Good", "Fair", "Poor", "Damaged"] as const,
+  itemTypes: ["Hardware", "Accessory", "Consumable", "Spare Part", "Software"] as const,
+  unitsOfMeasure: ["Nos", "Set", "Pair", "Box", "Pack", "Metre", "Licence"] as const,
+  // Largest CSV accepted by item bulk upload.
+  itemBulkUploadMaxRows: 1000,
 } as const;
 
 export type RequestType = (typeof appConfig.requestTypes)[number];

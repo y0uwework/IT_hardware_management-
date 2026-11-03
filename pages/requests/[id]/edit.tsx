@@ -18,7 +18,8 @@ function toForm(r: RequestDetail): RequestFormValues {
     requiredDate: r.requiredDate ? r.requiredDate.slice(0, 10) : "",
     costCentre: r.costCentre ?? "",
     items: r.items.map((i) => ({
-      categoryId: String(i.category.id),
+      // Lines created before the item master have no item; the requester picks one when editing.
+      itemId: i.item ? String(i.item.id) : "",
       quantity: String(i.quantity),
       requestedSpecification: i.requestedSpecification,
       estimatedUnitPrice: i.estimatedUnitPrice ?? "",

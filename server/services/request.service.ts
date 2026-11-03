@@ -139,9 +139,11 @@ export async function getRequest(user: AuthUser, id: number) {
     pool,
     `SELECT ${itemCols("i")},
             c.id AS [category.id], c.name AS [category.name], c.is_serialized AS [category.isSerialized],
+            im.id AS [item.id], im.item_code AS [item.code], im.item_name AS [item.name],
             rv.full_name AS [reviewedBy.fullName]
      FROM dbo.hardware_request_items i
      JOIN dbo.hardware_categories c ON c.id = i.category_id
+     LEFT JOIN dbo.item_master im ON im.id = i.item_id
      LEFT JOIN dbo.users rv ON rv.id = i.reviewed_by_user_id
      WHERE i.hardware_request_id = @id
      ORDER BY i.id;
@@ -188,16 +190,17 @@ export async function getRequest(user: AuthUser, id: number) {
   };
 }
 
-async function insertItems(tx: Tx, requestId: number, items: RequestInput["items"]) {
+async function insertItems(tx: Tx, requestId: number, items: RequestInput["items"], categoryByItem: Map<number, number>) {
   for (const i of items) {
     await execute(
       tx,
       `INSERT INTO dbo.hardware_request_items
-         (hardware_request_id, category_id, quantity, requested_specification, estimated_unit_price, fulfilment_status)
-       VALUES (@requestId, @categoryId, @quantity, @requestedSpecification, @estimatedUnitPrice, @fulfilmentStatus)`,
+         (hardware_request_id, item_id, category_id, quantity, requested_specification, estimated_unit_price, fulfilment_status)
+       VALUES (@requestId, @itemId, @categoryId, @quantity, @requestedSpecification, @estimatedUnitPrice, @fulfilmentStatus)`,
       {
         requestId,
-        categoryId: i.categoryId,
+        itemId: i.itemId,
+        categoryId: categoryByItem.get(i.itemId)!,
         quantity: i.quantity,
         requestedSpecification: i.requestedSpecification,
         estimatedUnitPrice: i.estimatedUnitPrice,
@@ -207,14 +210,25 @@ async function insertItems(tx: Tx, requestId: number, items: RequestInput["items
   }
 }
 
-async function assertCategoriesActive(tx: Tx, items: RequestInput["items"]) {
-  const ids = Array.from(new Set(items.map((i) => i.categoryId)));
-  const row = await queryOne<{ n: number }>(
+/**
+ * Every requested item must be an active, non-deleted item master record in an active category.
+ * Returns item id → category id; stock and fulfilment stay keyed by category.
+ */
+async function resolveItems(tx: Tx, items: RequestInput["items"]) {
+  const ids = Array.from(new Set(items.map((i) => i.itemId)));
+  const rows = await query<{ id: number; categoryId: number }>(
     tx,
-    `SELECT COUNT(*) AS n FROM dbo.hardware_categories WHERE id IN (@ids) AND is_active = 1`,
+    `SELECT im.id, im.category_id AS categoryId
+     FROM dbo.item_master im JOIN dbo.hardware_categories c ON c.id = im.category_id
+     WHERE im.id IN (@ids) AND im.is_deleted = 0 AND im.is_active = 1 AND c.is_active = 1`,
     { ids }
   );
-  if ((row?.n ?? 0) !== ids.length) throw new AppError("VALIDATION_ERROR", "One or more hardware categories are invalid or inactive");
+  const map = new Map(rows.map((r) => [r.id, r.categoryId]));
+  const errors = items
+    .map((it, idx) => (map.has(it.itemId) ? null : { path: `items.${idx}.itemId`, message: "This item is no longer available" }))
+    .filter((e): e is { path: string; message: string } => e !== null);
+  if (errors.length) throw new AppError("VALIDATION_ERROR", "One or more items are invalid or inactive", errors);
+  return map;
 }
 
 async function submitInTx(tx: Tx, user: AuthUser, requestId: number, from: string, correlationId?: string) {
@@ -249,7 +263,7 @@ const dateOrNull = (v: string | null | undefined) => (v ? new Date(v) : null);
 
 export async function createRequest(user: AuthUser, input: RequestInput, correlationId?: string) {
   return withTransaction(async (tx) => {
-    await assertCategoriesActive(tx, input.items);
+    const categoryByItem = await resolveItems(tx, input.items);
     const year = new Date().getFullYear();
     const created = (await queryOne<{ id: number }>(
       tx,
@@ -275,7 +289,7 @@ export async function createRequest(user: AuthUser, input: RequestInput, correla
       id: created.id,
       requestNumber,
     });
-    await insertItems(tx, created.id, input.items);
+    await insertItems(tx, created.id, input.items, categoryByItem);
     await audit(tx, {
       actorUserId: user.id,
       action: "request.create",
@@ -305,7 +319,7 @@ export async function updateRequest(user: AuthUser, id: number, input: RequestIn
       throw conflict(`Requests in "${existing.status}" status cannot be edited`);
     }
     const itemsBefore = await countItems(tx, id);
-    await assertCategoriesActive(tx, input.items);
+    const categoryByItem = await resolveItems(tx, input.items);
     await execute(tx, `DELETE FROM dbo.hardware_request_items WHERE hardware_request_id = @id`, { id });
     await execute(
       tx,
@@ -323,7 +337,7 @@ export async function updateRequest(user: AuthUser, id: number, input: RequestIn
         costCentre: input.costCentre ?? null,
       }
     );
-    await insertItems(tx, id, input.items);
+    await insertItems(tx, id, input.items, categoryByItem);
     await audit(tx, {
       actorUserId: user.id,
       action: "request.update",

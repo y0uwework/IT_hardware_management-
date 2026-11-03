@@ -27,7 +27,13 @@ describe("hasPermission / filterSidebar", () => {
 
   it("shows only authorized entries", () => {
     const labels = filterSidebar(sidebarConfig, employee).map((i) => i.label);
-    expect(labels).toEqual(["Dashboard", "Hardware Requests", "My Assets"]);
+    expect(labels).toEqual(["Dashboard", "Asset Requests"]);
+  });
+
+  it("shows the item master only with item.view", () => {
+    const labels = (permissions: string[]) => filterSidebar(sidebarConfig, { permissions }).map((i) => i.label);
+    expect(labels(["item.view"])).toContain("Item Master");
+    expect(labels(["item.create"])).not.toContain("Item Master");
   });
 
   it("filters children independently", () => {

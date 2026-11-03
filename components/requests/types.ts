@@ -40,6 +40,11 @@ export interface RequestDetail {
   }[];
 }
 
+/** Display name of a request line: the item master name, or the category for older lines. */
+export function requestItemLabel(i: { item: { name: string } | null; category: { name: string } }) {
+  return i.item?.name ?? i.category.name;
+}
+
 export interface RequestItem {
   id: number;
   quantity: number;
@@ -53,6 +58,8 @@ export interface RequestItem {
   reviewedAt: string | null;
   reviewedBy: { fullName: string } | null;
   category: { id: number; name: string; isSerialized: boolean };
+  /** Null for lines created before the item master existed. */
+  item: { id: number; code: string; name: string } | null;
   reservations: {
     id: number;
     quantity: number;

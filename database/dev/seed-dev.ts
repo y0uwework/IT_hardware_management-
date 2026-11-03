@@ -124,6 +124,27 @@ async function main() {
     );
   }
 
+  const items = [
+    { code: "LAP-DL5440", name: "Dell Latitude 5440 14in", category: "LAPTOP", itemType: "Hardware", manufacturer: "Dell", model: "Latitude 5440", uom: "Nos", cost: 72000, description: "Intel i5, 16GB RAM, 512GB SSD, 14-inch FHD, Windows 11 Pro" },
+    { code: "LAP-MBA13", name: "Apple MacBook Air 13in M3", category: "LAPTOP", itemType: "Hardware", manufacturer: "Apple", model: "MacBook Air M3", uom: "Nos", cost: 115000, description: "M3, 16GB RAM, 512GB SSD, 13.6-inch" },
+    { code: "MON-P2423", name: "Dell P2423 24in Monitor", category: "MONITOR", itemType: "Hardware", manufacturer: "Dell", model: "P2423", uom: "Nos", cost: 16500, description: "24-inch IPS, 1920x1200, HDMI/DP/USB" },
+    { code: "DOCK-WD19", name: "Dell WD19S USB-C Dock", category: "DOCK", itemType: "Accessory", manufacturer: "Dell", model: "WD19S", uom: "Nos", cost: 14000, description: "USB-C dock, 130W, dual display" },
+    { code: "KB-MK270", name: "Logitech MK270 Keyboard + Mouse", category: "KEYBOARD", itemType: "Accessory", manufacturer: "Logitech", model: "MK270", uom: "Set", cost: 1800, description: "Wireless keyboard and mouse combo" },
+    { code: "MS-M90", name: "Logitech M90 Wired Mouse", category: "MOUSE", itemType: "Accessory", manufacturer: "Logitech", model: "M90", uom: "Nos", cost: 350, description: "USB wired optical mouse" },
+  ];
+  const seedUserId = userIds.get("EMP004")!;
+  for (const it of items) {
+    await execute(
+      pool,
+      `IF NOT EXISTS (SELECT 1 FROM dbo.item_master WHERE item_code = @code AND is_deleted = 0)
+         INSERT INTO dbo.item_master
+           (item_code, item_name, category_id, item_type, manufacturer, model, unit_of_measure, standard_cost, description, created_by_user_id)
+         SELECT @code, @name, c.id, @itemType, @manufacturer, @model, @uom, @cost, @description, @createdBy
+         FROM dbo.hardware_categories c WHERE c.code = @category`,
+      { ...it, createdBy: seedUserId }
+    );
+  }
+
   const admin = (await loadAuthUser(userIds.get("EMP003")!))!;
   const superAdmin = (await loadAuthUser(userIds.get("EMP004")!))!;
 

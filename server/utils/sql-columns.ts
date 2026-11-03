@@ -36,6 +36,26 @@ export const categoryCols = cols({
   createdAt: "created_at",
 });
 
+export const itemMasterCols = cols({
+  id: "id",
+  code: "item_code",
+  name: "item_name",
+  categoryId: "category_id",
+  itemType: "item_type",
+  manufacturer: "manufacturer",
+  model: "model",
+  partNumber: "part_number",
+  description: "description",
+  unitOfMeasure: "unit_of_measure",
+  hsnCode: "hsn_code",
+  standardCost: decimal("standard_cost"),
+  warrantyMonths: "warranty_months",
+  reorderLevel: "reorder_level",
+  isActive: "is_active",
+  createdAt: "created_at",
+  updatedAt: "updated_at",
+});
+
 export const warehouseCols = cols({
   id: "id",
   code: "code",
@@ -66,6 +86,7 @@ export const itemCols = cols({
   id: "id",
   hardwareRequestId: "hardware_request_id",
   categoryId: "category_id",
+  itemId: "item_id",
   quantity: "quantity",
   requestedSpecification: "requested_specification",
   approvedSpecification: "approved_specification",

@@ -39,6 +39,7 @@ interface Task {
       requestedSpecification: string;
       estimatedUnitPrice: string | null;
       category: { name: string };
+      item: { code: string; name: string } | null;
     }[];
     history: { id: number; action: string; stageName: string | null; comments: string | null; createdAt: string; actor: { fullName: string } }[];
   };
@@ -146,8 +147,13 @@ export default function ApprovalDetailPage({ user, forbidden }: ProtectedPagePro
                   <li key={i.id} className="flex flex-wrap items-start justify-between gap-3 border-b border-neutral-200 px-4 py-4 last:border-0 sm:px-6">
                     <span className="min-w-0">
                       <span className="block font-semibold">
-                        {i.quantity} × {i.category.name}
+                        {i.quantity} × {i.item?.name ?? i.category.name}
                       </span>
+                      {i.item && (
+                        <span className="block text-caption text-neutral-500">
+                          <span className="font-mono">{i.item.code}</span> · {i.category.name}
+                        </span>
+                      )}
                       <span className="block whitespace-pre-line text-body-sm text-neutral-600">{i.requestedSpecification}</span>
                     </span>
                     <span className="text-body-sm text-neutral-600">

@@ -87,6 +87,32 @@ export const permissions = [
   },
 
   {
+    key: "item.view",
+    module: "Item Master",
+    description: "View the item master",
+  },
+  {
+    key: "item.create",
+    module: "Item Master",
+    description: "Add items to the item master",
+  },
+  {
+    key: "item.edit",
+    module: "Item Master",
+    description: "Edit item master records",
+  },
+  {
+    key: "item.delete",
+    module: "Item Master",
+    description: "Delete (deactivate permanently) item master records",
+  },
+  {
+    key: "item.bulk_upload",
+    module: "Item Master",
+    description: "Bulk upload items from a CSV sheet",
+  },
+
+  {
     key: "procurement.manage",
     module: "Procurement",
     description: "Manage procurement activities",

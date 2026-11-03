@@ -12,7 +12,7 @@ import { ConfirmDialog } from "@/components/common/Modal";
 import { Input, Textarea } from "@/components/common/FormField";
 import { ItReviewPanel } from "@/components/requests/ItReviewPanel";
 import { AssignModal } from "@/components/assets/AssignModal";
-import type { RequestDetail, RequestItem } from "@/components/requests/types";
+import { requestItemLabel, type RequestDetail, type RequestItem } from "@/components/requests/types";
 import { withPageAuth, type ProtectedPageProps } from "@/lib/page-auth";
 import { api, ApiClientError, formatDate, formatMoney, useApi } from "@/lib/client";
 import { hasPermission } from "@/lib/permissions";
@@ -285,8 +285,13 @@ function ItemRow({
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="font-headline text-base font-semibold">
-            {item.quantity} × {item.category.name}
+            {item.quantity} × {requestItemLabel(item)}
           </p>
+          {item.item && (
+            <p className="text-caption font-normal text-neutral-500">
+              <span className="font-mono">{item.item.code}</span> · {item.category.name}
+            </p>
+          )}
           <p className="mt-1 whitespace-pre-line text-body-sm text-neutral-700">{item.approvedSpecification ?? item.requestedSpecification}</p>
           {item.approvedSpecification && item.approvedSpecification !== item.requestedSpecification && (
             <p className="mt-1 text-caption font-normal text-neutral-500">Requested: {item.requestedSpecification}</p>
