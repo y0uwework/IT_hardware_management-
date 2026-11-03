@@ -19,7 +19,9 @@
 }
 
 @layer components {
-  .overline {
+  /* Small uppercase label. Not named "overline": that is Tailwind's text-decoration utility
+     and would draw a line above the text. */
+  .eyebrow {
     @apply text-overline uppercase text-neutral-500;
   }
 }

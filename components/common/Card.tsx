@@ -52,7 +52,7 @@ export function StatCard({
   const body = (
     <div className="flex h-full items-start justify-between gap-4 rounded-lg border border-neutral-200 bg-surface p-5 shadow-subtle transition-all duration-200 group-hover:-translate-y-[3px] group-hover:shadow-large">
       <div>
-        <p className="overline">{label}</p>
+        <p className="eyebrow">{label}</p>
         <p className={`mt-2 font-headline text-3xl font-bold ${accentText}`}>{value}</p>
         {hint && <p className="mt-1 text-body-sm text-neutral-500">{hint}</p>}
       </div>

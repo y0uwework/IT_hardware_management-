@@ -65,11 +65,11 @@ export default function AuditLogsPage({ user, forbidden }: ProtectedPageProps) {
             {open.correlationId && <p className="font-mono text-neutral-500">Correlation: {open.correlationId}</p>}
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               <div>
-                <p className="overline mb-2">Before</p>
+                <p className="eyebrow mb-2">Before</p>
                 <pre className="max-h-80 overflow-auto rounded-md bg-neutral-50 p-3 font-mono text-[12px]">{pretty(open.beforeJson)}</pre>
               </div>
               <div>
-                <p className="overline mb-2">After</p>
+                <p className="eyebrow mb-2">After</p>
                 <pre className="max-h-80 overflow-auto rounded-md bg-neutral-50 p-3 font-mono text-[12px]">{pretty(open.afterJson)}</pre>
               </div>
             </div>

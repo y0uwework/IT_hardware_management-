@@ -168,7 +168,7 @@ export function RequestForm({ initial, requestId }: { initial: RequestFormValues
         <div className="flex flex-col gap-5">
           {values.items.map((item, i) => (
             <fieldset key={i} className="rounded-md border border-neutral-200 p-4">
-              <legend className="overline px-1">Item {i + 1}</legend>
+              <legend className="eyebrow px-1">Item {i + 1}</legend>
               <div className="grid grid-cols-1 gap-4 md:grid-cols-12">
                 <Select
                   label="Item"

@@ -138,20 +138,20 @@ export default function AssetDetailPage({ user, forbidden }: ProtectedPageProps)
                   ["Registered", `${formatDate(a.createdAt)} by ${a.createdBy.fullName}`],
                 ].map(([k, val]) => (
                   <div key={k}>
-                    <dt className="overline">{k}</dt>
+                    <dt className="eyebrow">{k}</dt>
                     <dd className="mt-1">{val}</dd>
                   </div>
                 ))}
               </dl>
               {a.specification && (
                 <div className="mt-6">
-                  <p className="overline">Specification</p>
+                  <p className="eyebrow">Specification</p>
                   <p className="mt-1 whitespace-pre-line">{a.specification}</p>
                 </div>
               )}
               {a.notes && (
                 <div className="mt-4">
-                  <p className="overline">Notes</p>
+                  <p className="eyebrow">Notes</p>
                   <p className="mt-1 whitespace-pre-line">{a.notes}</p>
                 </div>
               )}

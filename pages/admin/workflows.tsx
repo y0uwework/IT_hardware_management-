@@ -282,7 +282,7 @@ export default function WorkflowsPage({ user, forbidden }: ProtectedPageProps) {
             </div>
             <div>
               <div className="mb-3 flex items-center justify-between">
-                <p className="overline">Stages</p>
+                <p className="eyebrow">Stages</p>
                 <Button
                   variant="secondary"
                   size="sm"

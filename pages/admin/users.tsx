@@ -187,7 +187,7 @@ export default function UsersAccessPage({ user, forbidden }: ProtectedPageProps)
         <div className="flex flex-col gap-6">
           {byModule.map(([module, list]) => (
             <fieldset key={module}>
-              <legend className="overline mb-3">{module}</legend>
+              <legend className="eyebrow mb-3">{module}</legend>
               <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
                 {list.map((p) => (
                   <Checkbox

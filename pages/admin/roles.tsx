@@ -60,7 +60,7 @@ export default function RolesPage({ user, forbidden }: ProtectedPageProps) {
                     .filter(([, keys]) => keys.some((k) => held.has(k)))
                     .map(([module, keys]) => (
                       <div key={module}>
-                        <p className="overline mb-1">{module}</p>
+                        <p className="eyebrow mb-1">{module}</p>
                         <p className="flex flex-wrap gap-1">
                           {keys
                             .filter((k) => held.has(k))

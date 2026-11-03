@@ -23,7 +23,7 @@ export function PlannedModule({
         <span className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-neutral-100 text-neutral-600">
           <Construction size={26} aria-hidden="true" />
         </span>
-        <p className="overline">{phase}</p>
+        <p className="eyebrow">{phase}</p>
         <h2 className="mt-2 font-headline text-subhead">Coming soon</h2>
         <p className="mx-auto mt-2 max-w-lg text-body text-neutral-600">This module is planned. It will include:</p>
         <ul className="mx-auto mt-4 flex max-w-xl flex-wrap justify-center gap-2">

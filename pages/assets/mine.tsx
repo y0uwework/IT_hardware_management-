@@ -78,7 +78,7 @@ export default function MyAssetsPage({ user, forbidden }: ProtectedPageProps) {
                   <span className="rounded-full bg-[#FEF9C3] px-2.5 py-0.5 text-caption text-[#854D0E]">Action needed</span>
                 )}
               </div>
-              <p className="overline mt-4">{a.asset.category.name}</p>
+              <p className="eyebrow mt-4">{a.asset.category.name}</p>
               <h2 className="mt-1 font-headline text-lg font-semibold">
                 {[a.asset.manufacturer, a.asset.model].filter(Boolean).join(" ") || a.asset.assetTag}
               </h2>

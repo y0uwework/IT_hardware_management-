@@ -30,7 +30,7 @@ const IT_STATUSES: string[] = [
 function Detail({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div>
-      <dt className="overline">{label}</dt>
+      <dt className="eyebrow">{label}</dt>
       <dd className="mt-1 text-body text-neutral-900">{children}</dd>
     </div>
   );
@@ -138,7 +138,7 @@ export default function RequestDetailPage({ user, forbidden }: ProtectedPageProp
                 </dl>
                 {r.justification && (
                   <div className="mt-6">
-                    <p className="overline">Justification</p>
+                    <p className="eyebrow">Justification</p>
                     <p className="mt-1 whitespace-pre-line text-body text-neutral-800">{r.justification}</p>
                   </div>
                 )}

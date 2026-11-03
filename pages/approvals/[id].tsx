@@ -95,7 +95,7 @@ export default function ApprovalDetailPage({ user, forbidden }: ProtectedPagePro
             <Card title="Request">
               <dl className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
                 <div>
-                  <dt className="overline">Requester</dt>
+                  <dt className="eyebrow">Requester</dt>
                   <dd className="mt-1">
                     {req.requester.fullName}
                     <span className="block text-body-sm text-neutral-500">
@@ -104,33 +104,33 @@ export default function ApprovalDetailPage({ user, forbidden }: ProtectedPagePro
                   </dd>
                 </div>
                 <div>
-                  <dt className="overline">Department</dt>
+                  <dt className="eyebrow">Department</dt>
                   <dd className="mt-1">{req.requester.department ?? "—"}</dd>
                 </div>
                 <div>
-                  <dt className="overline">Submitted</dt>
+                  <dt className="eyebrow">Submitted</dt>
                   <dd className="mt-1">{formatDate(req.submittedAt, true)}</dd>
                 </div>
                 <div>
-                  <dt className="overline">Type</dt>
+                  <dt className="eyebrow">Type</dt>
                   <dd className="mt-1">{req.requestType}</dd>
                 </div>
                 <div>
-                  <dt className="overline">Priority</dt>
+                  <dt className="eyebrow">Priority</dt>
                   <dd className="mt-1">{req.priority}</dd>
                 </div>
                 <div>
-                  <dt className="overline">Needed by</dt>
+                  <dt className="eyebrow">Needed by</dt>
                   <dd className="mt-1">{formatDate(req.requiredDate)}</dd>
                 </div>
               </dl>
               <div className="mt-6">
-                <p className="overline">Purpose</p>
+                <p className="eyebrow">Purpose</p>
                 <p className="mt-1">{req.purpose}</p>
               </div>
               {req.justification && (
                 <div className="mt-4">
-                  <p className="overline">Business justification</p>
+                  <p className="eyebrow">Business justification</p>
                   <p className="mt-1 whitespace-pre-line text-neutral-800">{req.justification}</p>
                 </div>
               )}
