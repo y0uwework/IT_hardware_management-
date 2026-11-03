@@ -32,7 +32,7 @@ function addDays(days: number) {
 /** Resolve approver user IDs for a stage. The requester can never approve their own request. */
 async function resolveApprovers(
   tx: Tx,
-  stage: { name: string; approverType: string; roleId: number | null },
+  stage: { name: string; approverType: string; roleKey: string | null },
   requester: { id: number; managerId: number | null }
 ): Promise<number[]> {
   let ids: number[] = [];
@@ -44,12 +44,12 @@ async function resolveApprovers(
       });
       if (mgr) ids = [mgr.id];
     }
-  } else if (stage.approverType === APPROVER_TYPE.ROLE && stage.roleId) {
-    const holders = await tx.userRole.findMany({
-      where: { roleId: stage.roleId, role: { isActive: true }, user: { isActive: true } },
-      select: { userId: true },
+  } else if (stage.approverType === APPROVER_TYPE.ROLE && stage.roleKey) {
+    const holders = await tx.user.findMany({
+      where: { role: stage.roleKey, isActive: true },
+      select: { id: true },
     });
-    ids = holders.map((h) => h.userId);
+    ids = holders.map((h) => h.id);
   }
   ids = ids.filter((id) => id !== requester.id);
   if (ids.length === 0) {
@@ -64,7 +64,7 @@ async function resolveApprovers(
 async function createTasksForStageGroup(
   tx: Tx,
   request: { id: number; requestNumber: string; requester: { id: number; managerId: number | null; fullName: string } },
-  stages: { id: number; name: string; approverType: string; roleId: number | null; dueDays: number }[],
+  stages: { id: number; name: string; approverType: string; roleKey: string | null; dueDays: number }[],
   cycle: number
 ) {
   for (const stage of stages) {

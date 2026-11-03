@@ -29,25 +29,27 @@ model User {
   location     String? @db.NVarChar(100)
   managerId    Int?    @map("manager_id")
   isActive     Boolean @map("is_active")
+  /// Role key from config/roles.config.ts (roles are defined in code, not in a table).
+  role         String? @db.NVarChar(50)
+  /// JSON array of permissions.id values, e.g. "[1,4,7]". This is what authorizes the user.
+  permissions  String  @default("[]") @db.NVarChar(Max)
 
-  manager  User?  @relation("UserManager", fields: [managerId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  reports  User[] @relation("UserManager")
+  manager User?  @relation("UserManager", fields: [managerId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  reports User[] @relation("UserManager")
 
-  userRoles           UserRole[]           @relation("UserRoleUser")
-  rolesAssigned       UserRole[]           @relation("UserRoleAssignedBy")
-  requests            HardwareRequest[]    @relation("RequestRequester")
-  approvalTasks       ApprovalTask[]       @relation("TaskApprover")
-  approvalActions     ApprovalHistory[]    @relation("HistoryActor")
-  assignments         AssetAssignment[]    @relation("AssignmentUser")
-  assignmentsIssued   AssetAssignment[]    @relation("AssignmentIssuedBy")
-  assignmentsReceived AssetAssignment[]    @relation("AssignmentReturnedTo")
+  requests            HardwareRequest[]      @relation("RequestRequester")
+  approvalTasks       ApprovalTask[]         @relation("TaskApprover")
+  approvalActions     ApprovalHistory[]      @relation("HistoryActor")
+  assignments         AssetAssignment[]      @relation("AssignmentUser")
+  assignmentsIssued   AssetAssignment[]      @relation("AssignmentIssuedBy")
+  assignmentsReceived AssetAssignment[]      @relation("AssignmentReturnedTo")
   notifications       Notification[]
   auditLogs           AuditLog[]
-  itReviews           HardwareRequestItem[] @relation("ItemReviewedBy")
+  itReviews           HardwareRequestItem[]  @relation("ItemReviewedBy")
   reservationsMade    InventoryReservation[] @relation("ReservationCreatedBy")
-  movementsMade       InventoryMovement[]   @relation("MovementCreatedBy")
-  assetsCreated       Asset[]               @relation("AssetCreatedBy")
-  workflowsCreated    ApprovalWorkflow[]    @relation("WorkflowCreatedBy")
+  movementsMade       InventoryMovement[]    @relation("MovementCreatedBy")
+  assetsCreated       Asset[]                @relation("AssetCreatedBy")
+  workflowsCreated    ApprovalWorkflow[]     @relation("WorkflowCreatedBy")
 
   @@map("users")
 }
@@ -64,52 +66,7 @@ model Permission {
   createdAt     DateTime @default(now()) @map("created_at") @db.DateTime2
   updatedAt     DateTime @updatedAt @map("updated_at") @db.DateTime2
 
-  rolePermissions RolePermission[]
-
   @@map("permissions")
-}
-
-model Role {
-  id          Int      @id @default(autoincrement())
-  roleName    String   @unique @map("role_name") @db.NVarChar(100)
-  description String?  @db.NVarChar(500)
-  isActive    Boolean  @default(true) @map("is_active")
-  createdAt   DateTime @default(now()) @map("created_at") @db.DateTime2
-
-  userRoles       UserRole[]
-  rolePermissions RolePermission[]
-  workflowStages  ApprovalWorkflowStage[]
-
-  @@map("roles")
-}
-
-model UserRole {
-  id               Int      @id @default(autoincrement())
-  userId           Int      @map("user_id")
-  roleId           Int      @map("role_id")
-  assignedByUserId Int?     @map("assigned_by_user_id")
-  assignedAt       DateTime @default(now()) @map("assigned_at") @db.DateTime2
-
-  user       User  @relation("UserRoleUser", fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  role       Role  @relation(fields: [roleId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  assignedBy User? @relation("UserRoleAssignedBy", fields: [assignedByUserId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-
-  @@unique([userId, roleId])
-  @@index([roleId])
-  @@map("user_roles")
-}
-
-model RolePermission {
-  id           Int      @id @default(autoincrement())
-  roleId       Int      @map("role_id")
-  permissionId Int      @map("permission_id")
-  createdAt    DateTime @default(now()) @map("created_at") @db.DateTime2
-
-  role       Role       @relation(fields: [roleId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  permission Permission @relation(fields: [permissionId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-
-  @@unique([roleId, permissionId])
-  @@map("role_permissions")
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -171,8 +128,8 @@ model HardwareRequest {
   createdAt       DateTime  @default(now()) @map("created_at") @db.DateTime2
   updatedAt       DateTime  @updatedAt @map("updated_at") @db.DateTime2
 
-  requester User              @relation("RequestRequester", fields: [requesterUserId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  workflow  ApprovalWorkflow? @relation(fields: [workflowId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  requester User                  @relation("RequestRequester", fields: [requesterUserId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  workflow  ApprovalWorkflow?     @relation(fields: [workflowId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   items     HardwareRequestItem[]
   tasks     ApprovalTask[]
   history   ApprovalHistory[]
@@ -209,21 +166,21 @@ model HardwareRequestItem {
 }
 
 model ApprovalWorkflow {
-  id              Int       @id @default(autoincrement())
-  workflowKey     String    @map("workflow_key") @db.NVarChar(100)
-  name            String    @db.NVarChar(150)
+  id              Int      @id @default(autoincrement())
+  workflowKey     String   @map("workflow_key") @db.NVarChar(100)
+  name            String   @db.NVarChar(150)
   version         Int
   /// null = applies to any request type
-  requestType     String?   @map("request_type") @db.NVarChar(50)
+  requestType     String?  @map("request_type") @db.NVarChar(50)
   /// null = applies to any department
-  department      String?   @db.NVarChar(100)
-  minAmount       Decimal?  @map("min_amount") @db.Decimal(18, 2)
-  maxAmount       Decimal?  @map("max_amount") @db.Decimal(18, 2)
+  department      String?  @db.NVarChar(100)
+  minAmount       Decimal? @map("min_amount") @db.Decimal(18, 2)
+  maxAmount       Decimal? @map("max_amount") @db.Decimal(18, 2)
   /// Higher priority wins when several workflows match
-  priority        Int       @default(0)
-  isActive        Boolean   @default(true) @map("is_active")
-  createdByUserId Int?      @map("created_by_user_id")
-  createdAt       DateTime  @default(now()) @map("created_at") @db.DateTime2
+  priority        Int      @default(0)
+  isActive        Boolean  @default(true) @map("is_active")
+  createdByUserId Int?     @map("created_by_user_id")
+  createdAt       DateTime @default(now()) @map("created_at") @db.DateTime2
 
   createdBy User?                   @relation("WorkflowCreatedBy", fields: [createdByUserId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   stages    ApprovalWorkflowStage[]
@@ -239,13 +196,13 @@ model ApprovalWorkflowStage {
   /// Stages sharing the same order run in parallel; all must approve.
   stageOrder   Int     @map("stage_order")
   name         String  @db.NVarChar(150)
-  /// MANAGER = requester's manager; ROLE = any active holder of roleId
+  /// MANAGER = requester's manager; ROLE = every active user whose users.role = roleKey
   approverType String  @map("approver_type") @db.NVarChar(30)
-  roleId       Int?    @map("role_id")
+  /// Role key from config/roles.config.ts
+  roleKey      String? @map("role_key") @db.NVarChar(50)
   dueDays      Int     @default(3) @map("due_days")
 
   workflow ApprovalWorkflow @relation(fields: [workflowId], references: [id], onDelete: Cascade, onUpdate: NoAction)
-  role     Role?            @relation(fields: [roleId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   tasks    ApprovalTask[]
 
   @@index([workflowId])
@@ -253,18 +210,18 @@ model ApprovalWorkflowStage {
 }
 
 model ApprovalTask {
-  id                Int       @id @default(autoincrement())
-  hardwareRequestId Int       @map("hardware_request_id")
-  stageId           Int       @map("stage_id")
-  approverUserId    Int       @map("approver_user_id")
+  id                  Int       @id @default(autoincrement())
+  hardwareRequestId   Int       @map("hardware_request_id")
+  stageId             Int       @map("stage_id")
+  approverUserId      Int       @map("approver_user_id")
   /// Increments each time the request is re-submitted after "Returned for Changes"
-  cycle             Int       @default(1)
-  status            String    @db.NVarChar(30)
-  dueAt             DateTime? @map("due_at") @db.DateTime2
-  actedAt           DateTime? @map("acted_at") @db.DateTime2
-  comments          String?   @db.NVarChar(Max)
-  delegatedFromUserId Int?    @map("delegated_from_user_id")
-  createdAt         DateTime  @default(now()) @map("created_at") @db.DateTime2
+  cycle               Int       @default(1)
+  status              String    @db.NVarChar(30)
+  dueAt               DateTime? @map("due_at") @db.DateTime2
+  actedAt             DateTime? @map("acted_at") @db.DateTime2
+  comments            String?   @db.NVarChar(Max)
+  delegatedFromUserId Int?      @map("delegated_from_user_id")
+  createdAt           DateTime  @default(now()) @map("created_at") @db.DateTime2
 
   request  HardwareRequest       @relation(fields: [hardwareRequestId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   stage    ApprovalWorkflowStage @relation(fields: [stageId], references: [id], onDelete: NoAction, onUpdate: NoAction)
@@ -300,15 +257,15 @@ model ApprovalHistory {
 // ─────────────────────────────────────────────────────────────
 
 model InventoryStock {
-  id                    Int      @id @default(autoincrement())
-  categoryId            Int      @map("category_id")
-  warehouseId           Int      @map("warehouse_id")
-  quantityAvailable     Int      @default(0) @map("quantity_available")
-  quantityReserved      Int      @default(0) @map("quantity_reserved")
-  quantityIssued        Int      @default(0) @map("quantity_issued")
-  quantityDamaged       Int      @default(0) @map("quantity_damaged")
-  quantityUnderRepair   Int      @default(0) @map("quantity_under_repair")
-  updatedAt             DateTime @updatedAt @map("updated_at") @db.DateTime2
+  id                  Int      @id @default(autoincrement())
+  categoryId          Int      @map("category_id")
+  warehouseId         Int      @map("warehouse_id")
+  quantityAvailable   Int      @default(0) @map("quantity_available")
+  quantityReserved    Int      @default(0) @map("quantity_reserved")
+  quantityIssued      Int      @default(0) @map("quantity_issued")
+  quantityDamaged     Int      @default(0) @map("quantity_damaged")
+  quantityUnderRepair Int      @default(0) @map("quantity_under_repair")
+  updatedAt           DateTime @updatedAt @map("updated_at") @db.DateTime2
 
   category  HardwareCategory @relation(fields: [categoryId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   warehouse Warehouse        @relation(fields: [warehouseId], references: [id], onDelete: NoAction, onUpdate: NoAction)
@@ -400,23 +357,23 @@ model Asset {
 }
 
 model AssetAssignment {
-  id                 Int       @id @default(autoincrement())
-  assetId            Int       @map("asset_id")
-  userId             Int       @map("user_id")
-  requestItemId      Int?      @map("request_item_id")
-  assignedAt         DateTime  @default(now()) @map("assigned_at") @db.DateTime2
-  conditionAtIssue   String    @map("condition_at_issue") @db.NVarChar(30)
-  accessories        String?   @db.NVarChar(500)
-  issueNotes         String?   @map("issue_notes") @db.NVarChar(Max)
-  issuedByUserId     Int       @map("issued_by_user_id")
-  acknowledgedAt     DateTime? @map("acknowledged_at") @db.DateTime2
-  returnedAt         DateTime? @map("returned_at") @db.DateTime2
-  conditionAtReturn  String?   @map("condition_at_return") @db.NVarChar(30)
-  returnAccessories  String?   @map("return_accessories") @db.NVarChar(500)
-  inspectionNotes    String?   @map("inspection_notes") @db.NVarChar(Max)
-  returnedToUserId   Int?      @map("returned_to_user_id")
+  id                Int       @id @default(autoincrement())
+  assetId           Int       @map("asset_id")
+  userId            Int       @map("user_id")
+  requestItemId     Int?      @map("request_item_id")
+  assignedAt        DateTime  @default(now()) @map("assigned_at") @db.DateTime2
+  conditionAtIssue  String    @map("condition_at_issue") @db.NVarChar(30)
+  accessories       String?   @db.NVarChar(500)
+  issueNotes        String?   @map("issue_notes") @db.NVarChar(Max)
+  issuedByUserId    Int       @map("issued_by_user_id")
+  acknowledgedAt    DateTime? @map("acknowledged_at") @db.DateTime2
+  returnedAt        DateTime? @map("returned_at") @db.DateTime2
+  conditionAtReturn String?   @map("condition_at_return") @db.NVarChar(30)
+  returnAccessories String?   @map("return_accessories") @db.NVarChar(500)
+  inspectionNotes   String?   @map("inspection_notes") @db.NVarChar(Max)
+  returnedToUserId  Int?      @map("returned_to_user_id")
   /// true while the assignment is open; used for the "one active assignment per asset" filtered index
-  isActive           Boolean   @default(true) @map("is_active")
+  isActive          Boolean   @default(true) @map("is_active")
 
   asset       Asset                @relation(fields: [assetId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   user        User                 @relation("AssignmentUser", fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)

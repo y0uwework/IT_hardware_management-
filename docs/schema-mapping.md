@@ -46,11 +46,19 @@ Sessions are HMS's own HS256-signed, httpOnly, SameSite=Lax cookies that hold on
 organization already has a session cookie or SSO (OIDC/SAML/AD), replace
 `getAuthUser()` to read it instead.
 
-## 3. Existing RBAC tables (ASSUMED: none)
+## 3. Roles and permissions
 
-HMS creates `permissions`, `roles`, `user_roles` and `role_permissions`. If equivalents
-already exist, map these Prisma models onto them with `@@map`/`@map` instead of
-creating new tables, and delete those `CREATE TABLE` statements from the baseline migration.
+HMS creates only the `permissions` table. Roles are defined in code
+(`config/roles.config.ts`), not in the database. Access is stored on `users` itself:
+
+- `users.role` (NVARCHAR(50), nullable): a role key from the config, e.g. `IT_ADMIN`.
+- `users.permissions` (NVARCHAR(max), JSON array of `permissions.id`, default `'[]'`):
+  the permissions that actually authorize the user. Assigning a role copies that role's
+  default permissions here; administrators can then adjust them per user.
+
+**This means HMS adds two columns to the existing `users` table** (migration
+`20261103000000_roles_in_code`, guarded with `COL_LENGTH` checks). Confirm this is
+acceptable for the organization's employee master before deploying to production.
 
 ## 4. Organizational masters (ASSUMED: none)
 

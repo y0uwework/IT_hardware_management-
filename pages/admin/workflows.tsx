@@ -26,7 +26,7 @@ interface Workflow {
   priority: number;
   isActive: boolean;
   createdAt: string;
-  stages: { id: number; stageOrder: number; name: string; approverType: string; roleId: number | null; dueDays: number; role: { roleName: string } | null }[];
+  stages: { id: number; stageOrder: number; name: string; approverType: string; roleKey: string | null; dueDays: number }[];
   _count: { requests: number };
 }
 
@@ -34,7 +34,7 @@ interface StageDraft {
   stageOrder: string;
   name: string;
   approverType: "MANAGER" | "ROLE";
-  roleId: string;
+  roleKey: string;
   dueDays: string;
 }
 
@@ -49,7 +49,7 @@ interface Draft {
   stages: StageDraft[];
 }
 
-const blankStage = (order: number): StageDraft => ({ stageOrder: String(order), name: "", approverType: "MANAGER", roleId: "", dueDays: "3" });
+const blankStage = (order: number): StageDraft => ({ stageOrder: String(order), name: "", approverType: "MANAGER", roleKey: "", dueDays: "3" });
 
 const blankDraft = (): Draft => ({
   workflowKey: "",
@@ -75,7 +75,7 @@ function fromWorkflow(w: Workflow): Draft {
       stageOrder: String(s.stageOrder),
       name: s.name,
       approverType: s.approverType as "MANAGER" | "ROLE",
-      roleId: s.roleId ? String(s.roleId) : "",
+      roleKey: s.roleKey ?? "",
       dueDays: String(s.dueDays),
     })),
   };
@@ -83,7 +83,7 @@ function fromWorkflow(w: Workflow): Draft {
 
 export default function WorkflowsPage({ user, forbidden }: ProtectedPageProps) {
   const { data, error, loading, reload } = useApi<Workflow[]>(forbidden ? null : "/admin/workflows");
-  const roles = useApi<{ id: number; roleName: string }[]>(forbidden ? null : "/admin/roles");
+  const roles = useApi<{ key: string; name: string }[]>(forbidden ? null : "/admin/roles");
   const [draft, setDraft] = useState<Draft | null>(null);
   const [isNewKey, setIsNewKey] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -109,7 +109,7 @@ export default function WorkflowsPage({ user, forbidden }: ProtectedPageProps) {
           minAmount: draft.minAmount === "" ? null : draft.minAmount,
           maxAmount: draft.maxAmount === "" ? null : draft.maxAmount,
           priority: draft.priority,
-          stages: draft.stages.map((s) => ({ ...s, roleId: s.approverType === "ROLE" && s.roleId ? s.roleId : null })),
+          stages: draft.stages.map((s) => ({ ...s, roleKey: s.approverType === "ROLE" && s.roleKey ? s.roleKey : null })),
         },
       });
       setMsg(`Saved ${draft.name} as version ${r.data.version}. Requests already in progress keep the version they started with.`);
@@ -202,7 +202,7 @@ export default function WorkflowsPage({ user, forbidden }: ProtectedPageProps) {
                     <span className="rounded-md border border-neutral-200 bg-neutral-50 px-3 py-2 text-body-sm">
                       <span className="block font-semibold">{s.name}</span>
                       <span className="block text-caption font-normal text-neutral-500">
-                        {s.approverType === "MANAGER" ? "Requester's manager" : s.role?.roleName} · {s.dueDays}d
+                        {s.approverType === "MANAGER" ? "Requester's manager" : roles.data?.find((r) => r.key === s.roleKey)?.name ?? s.roleKey} · {s.dueDays}d
                       </span>
                     </span>
                   </li>
@@ -309,11 +309,11 @@ export default function WorkflowsPage({ user, forbidden }: ProtectedPageProps) {
                     />
                     <Select
                       label="Role"
-                      value={s.roleId}
+                      value={s.roleKey}
                       disabled={s.approverType !== "ROLE"}
-                      onChange={(e) => setStage(i, { roleId: e.target.value })}
+                      onChange={(e) => setStage(i, { roleKey: e.target.value })}
                       placeholder="—"
-                      options={(roles.data ?? []).map((r) => ({ value: r.id, label: r.roleName }))}
+                      options={(roles.data ?? []).map((r) => ({ value: r.key, label: r.name }))}
                       wrapperClassName="md:col-span-2"
                     />
                     <Input label="Due (days)" type="number" min={1} value={s.dueDays} onChange={(e) => setStage(i, { dueDays: e.target.value })} wrapperClassName="md:col-span-1" />

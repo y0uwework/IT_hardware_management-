@@ -103,12 +103,12 @@ export const sidebarConfig: SidebarItem[] = [
     permission: "admin.roles.manage",
     children: [
       {
-        label: "Roles & Permissions",
+        label: "Roles",
         route: "/admin/roles",
         permission: "admin.roles.manage",
       },
       {
-        label: "User Roles",
+        label: "Users & Access",
         route: "/admin/users",
         permission: "admin.roles.manage",
       },

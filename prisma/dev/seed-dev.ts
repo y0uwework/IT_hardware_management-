@@ -1,14 +1,15 @@
 // npm run seed:dev  — LOCAL DEVELOPMENT ONLY.
 //
-// Creates demo users (only in a dev database), demo roles with explicit permission
-// sets, master data, a default approval workflow and some stock so the
+// Creates demo users (only in a dev database) with a role from config/roles.config.ts
+// and that role's default permissions (stored as permission IDs on the user), master data, a default approval workflow and some stock so the
 // request → approval → IT review → assignment → acknowledgement flow can be tried end to end.
 // Refuses to run when NODE_ENV=production or AUTH_MODE is not "dev".
 // Run `npm run seed` first to sync the permission catalogue.
 
 import { prisma } from "../../lib/prisma";
 import { loadAuthUser } from "../../lib/auth";
-import { PERMISSION_KEYS, type PermissionKey } from "../../config/permissions.config";
+import { roles, type RoleKey } from "../../config/roles.config";
+import { serializePermissionIds } from "../../lib/auth";
 import { registerAsset } from "../../server/services/asset.service";
 import { recordManualMovement } from "../../server/services/inventory.service";
 import { saveWorkflowVersion } from "../../server/services/admin.service";
@@ -18,53 +19,20 @@ if (process.env.NODE_ENV === "production" || process.env.AUTH_MODE !== "dev") {
   process.exit(1);
 }
 
-const ROLES: Record<string, { description: string; permissions: PermissionKey[] }> = {
-  Employee: {
-    description: "Every employee: create and track own requests and assets",
-    permissions: ["dashboard.view", "request.create", "request.view", "asset.view"],
-  },
-  "Reporting Manager": {
-    description: "Approves requests from direct reports",
-    permissions: ["request.approve", "approve.button"],
-  },
-  "IT Admin": {
-    description: "Reviews requests, manages stock and issues hardware",
-    permissions: [
-      "request.it_review",
-      "request.view.all",
-      "request.approve",
-      "approve.button",
-      "inventory.view",
-      "inventory.manage",
-      "asset.view.all",
-      "asset.create",
-      "asset.assign",
-      "asset.return",
-      "employee.view",
-      "reports.view",
-    ],
-  },
-  Auditor: {
-    description: "Read-only access to records and audit history",
-    permissions: ["dashboard.view", "request.view", "request.view.all", "inventory.view", "asset.view.all", "audit.view", "reports.view"],
-  },
-  "Super Admin": {
-    description: "Application configuration, roles and workflows",
-    permissions: ["admin.roles.manage", "admin.workflow.manage", "admin.master_data.manage", "audit.view", "employee.view"],
-  },
-  Administrator: {
-    description: "Full access: every permission in the catalogue",
-    // Derived from the config so newly added permission keys are granted on the next seed run.
-    permissions: [...PERMISSION_KEYS],
-  },
-};
-
-const USERS = [
-  { employeeCode: "EMP001", fullName: "Aisha Khan", email: "aisha.khan@example.test", department: "Design", designation: "UX Designer", manager: "EMP002", roles: ["Employee"] },
-  { employeeCode: "EMP002", fullName: "Rahul Mehta", email: "rahul.mehta@example.test", department: "Design", designation: "Design Manager", manager: null, roles: ["Employee", "Reporting Manager"] },
-  { employeeCode: "EMP003", fullName: "Priya Nair", email: "priya.nair@example.test", department: "IT", designation: "IT Asset Manager", manager: null, roles: ["Employee", "IT Admin"] },
-  { employeeCode: "EMP004", fullName: "Sam Fernandes", email: "sam.fernandes@example.test", department: "IT", designation: "Systems Administrator", manager: "EMP003", roles: ["Employee", "Super Admin", "Auditor"] },
-  { employeeCode: "ADMIN", fullName: "Administrator", email: "admin@example.test", department: "IT", designation: "Application Administrator", manager: null, roles: ["Administrator"] },
+const USERS: {
+  employeeCode: string;
+  fullName: string;
+  email: string;
+  department: string;
+  designation: string;
+  manager: string | null;
+  role: RoleKey;
+}[] = [
+  { employeeCode: "EMP001", fullName: "Aisha Khan", email: "aisha.khan@example.test", department: "Design", designation: "UX Designer", manager: "EMP002", role: "EMPLOYEE" },
+  { employeeCode: "EMP002", fullName: "Rahul Mehta", email: "rahul.mehta@example.test", department: "Design", designation: "Design Manager", manager: null, role: "REPORTING_MANAGER" },
+  { employeeCode: "EMP003", fullName: "Priya Nair", email: "priya.nair@example.test", department: "IT", designation: "IT Asset Manager", manager: null, role: "IT_ADMIN" },
+  { employeeCode: "EMP004", fullName: "Sam Fernandes", email: "sam.fernandes@example.test", department: "IT", designation: "Systems Administrator", manager: "EMP003", role: "SUPER_ADMIN" },
+  { employeeCode: "ADMIN", fullName: "Administrator", email: "admin@example.test", department: "IT", designation: "Application Administrator", manager: null, role: "ADMINISTRATOR" },
 ];
 
 async function upsertUsers() {
@@ -92,41 +60,30 @@ async function upsertUsers() {
   return ids;
 }
 
-async function upsertRoles() {
-  const roleIds = new Map<string, number>();
-  for (const [roleName, def] of Object.entries(ROLES)) {
-    const role = await prisma.role.upsert({
-      where: { roleName },
-      update: { description: def.description },
-      create: { roleName, description: def.description },
+/** Default permission IDs for a role, resolved against the synced permission catalogue. */
+async function defaultPermissionIds(role: RoleKey) {
+  const keys = roles[role].defaultPermissions as readonly string[];
+  const perms = await prisma.permission.findMany({ where: { permissionKey: { in: [...keys] } }, select: { id: true } });
+  if (perms.length !== keys.length) throw new Error("Run `npm run seed` first to sync the permission catalogue.");
+  return perms.map((p) => p.id);
+}
+
+/** Give each demo user their role + default permissions. Users that already have a role are left alone. */
+async function assignRoles(ids: Map<string, number>) {
+  for (const u of USERS) {
+    const id = ids.get(u.employeeCode)!;
+    const current = await prisma.user.findUniqueOrThrow({ where: { id }, select: { role: true } });
+    if (current.role) continue;
+    await prisma.user.update({
+      where: { id },
+      data: { role: u.role, permissions: serializePermissionIds(await defaultPermissionIds(u.role)) },
     });
-    roleIds.set(roleName, role.id);
-    const perms = await prisma.permission.findMany({ where: { permissionKey: { in: def.permissions } } });
-    if (perms.length !== def.permissions.length) throw new Error("Run `npm run seed` first to sync the permission catalogue.");
-    for (const p of perms) {
-      await prisma.rolePermission.upsert({
-        where: { roleId_permissionId: { roleId: role.id, permissionId: p.id } },
-        update: {},
-        create: { roleId: role.id, permissionId: p.id },
-      });
-    }
   }
-  return roleIds;
 }
 
 async function main() {
   const userIds = await upsertUsers();
-  const roleIds = await upsertRoles();
-
-  for (const u of USERS) {
-    for (const r of u.roles) {
-      await prisma.userRole.upsert({
-        where: { userId_roleId: { userId: userIds.get(u.employeeCode)!, roleId: roleIds.get(r)! } },
-        update: {},
-        create: { userId: userIds.get(u.employeeCode)!, roleId: roleIds.get(r)! },
-      });
-    }
-  }
+  await assignRoles(userIds);
 
   const categories = [
     { code: "LAPTOP", name: "Laptop", isSerialized: true },
@@ -155,7 +112,7 @@ async function main() {
       minAmount: null,
       maxAmount: null,
       priority: 0,
-      stages: [{ stageOrder: 1, name: "Reporting manager", approverType: "MANAGER", roleId: null, dueDays: 3 }],
+      stages: [{ stageOrder: 1, name: "Reporting manager", approverType: "MANAGER", roleKey: null, dueDays: 3 }],
     });
     await saveWorkflowVersion(superAdmin, {
       workflowKey: "high-value-hardware",
@@ -166,8 +123,8 @@ async function main() {
       maxAmount: null,
       priority: 10,
       stages: [
-        { stageOrder: 1, name: "Reporting manager", approverType: "MANAGER", roleId: null, dueDays: 3 },
-        { stageOrder: 2, name: "IT head", approverType: "ROLE", roleId: roleIds.get("IT Admin")!, dueDays: 3 },
+        { stageOrder: 1, name: "Reporting manager", approverType: "MANAGER", roleKey: null, dueDays: 3 },
+        { stageOrder: 2, name: "IT head", approverType: "ROLE", roleKey: "IT_ADMIN", dueDays: 3 },
       ],
     });
   }

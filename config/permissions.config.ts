@@ -1,6 +1,7 @@
 // Source of truth for which permission keys exist.
 // `npm run seed` synchronizes this catalogue into the `permissions` table.
-// Which roles receive which permissions is database-backed and configured by administrators.
+// Roles (config/roles.config.ts) supply default permission sets; each user's granted
+// permission IDs are stored in users.permissions and can be adjusted per user.
 
 export const permissions = [
   {
@@ -117,7 +118,7 @@ export const permissions = [
   {
     key: "admin.roles.manage",
     module: "Administration",
-    description: "Manage roles, role permissions and role assignments",
+    description: "Assign user roles and per-user permissions",
   },
   {
     key: "admin.workflow.manage",

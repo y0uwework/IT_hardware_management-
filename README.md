@@ -18,7 +18,7 @@ blueprint and `DESIGN.md` for the visual system.
 | IT review: spec confirmation, per-warehouse stock reservation (race-safe), procurement shortfall, partial fulfilment | ✅ |
 | Assets: registration with tag generation, register, detail/lifecycle, assignment, employee acknowledgement, return with next status | ✅ |
 | Inventory: stock by category × warehouse, consumable receipts/adjustments, reservations, movement history | ✅ |
-| Notifications (in-app), dashboard, admin (roles ↔ permissions, user roles, workflows, master data, audit viewer) | ✅ |
+| Notifications (in-app), dashboard, admin (roles from config, per-user role + permissions, workflows, master data, audit viewer) | ✅ |
 | Procurement, Finance (Phase 4), Maintenance, email (Phase 5), Reports (Phase 6) | 🚧 placeholder pages |
 
 ## Getting started (local)
@@ -42,7 +42,8 @@ Sign in (dev mode) with an employee code:
 | `EMP001` | Aisha, employee | Create and submit a request; acknowledge the laptop |
 | `EMP002` | Rahul, Aisha's manager | Approve it in **Approvals** |
 | `EMP003` | Priya, IT admin | Open the request → IT review → reserve → *Issue to employee* |
-| `EMP004` | Sam, super admin | Roles & permissions, workflows, master data, audit logs |
+| `EMP004` | Sam, super admin | User access, workflows, master data, audit logs |
+| `ADMIN` | Administrator | Every permission |
 
 ## Scripts
 
@@ -50,7 +51,7 @@ Sign in (dev mode) with an employee code:
 |---|---|
 | `npm run migrate` | Apply committed migrations (production-safe `prisma migrate deploy`) |
 | `npm run migrate:dev -- --name x` | Create a new migration during development |
-| `npm run seed` | Idempotent permission catalogue sync. Never grants permissions to roles |
+| `npm run seed` | Idempotent permission catalogue sync. Never assigns roles or grants permissions to users |
 | `npm run seed:dev` | Demo data. Refuses unless `AUTH_MODE=dev` and not production |
 | `npm run typecheck` / `npm test` / `npm run build` | Quality gates |
 

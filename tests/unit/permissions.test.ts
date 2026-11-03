@@ -33,7 +33,7 @@ describe("hasPermission / filterSidebar", () => {
   it("filters children independently", () => {
     const admin = { permissions: ["admin.roles.manage"] };
     const adminItem = filterSidebar(sidebarConfig, admin).find((i) => i.label === "Administration")!;
-    expect(adminItem.children?.map((c) => c.label)).toEqual(["Roles & Permissions", "User Roles"]);
+    expect(adminItem.children?.map((c) => c.label)).toEqual(["Roles", "Users & Access"]);
   });
 });
 

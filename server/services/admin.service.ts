@@ -2,95 +2,117 @@ import { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { prisma } from "../../lib/prisma";
 import { AppError, conflict, notFound } from "../../lib/errors";
-import type { AuthUser } from "../../lib/auth";
+import { parsePermissionIds, serializePermissionIds, type AuthUser } from "../../lib/auth";
 import { audit } from "../utils/audit";
 import { skipTake, type Pagination } from "../../lib/validation";
 import { appConfig } from "../../config/app.config";
 import { APPROVER_TYPE } from "./approval.service";
+import { isRoleKey, listRoleDefinitions, roleName, roles, type RoleKey } from "../../config/roles.config";
 
-// ── Roles & permissions ──────────────────────────────────────
+type Tx = Prisma.TransactionClient;
 
-export const roleSchema = z.object({
-  roleName: z.string().trim().min(2).max(100),
-  description: z.string().trim().max(500).optional().nullable(),
-  isActive: z.boolean().optional(),
-});
+// ── Roles (defined in config/roles.config.ts) & per-user permissions ──
 
-export async function listRoles() {
-  return prisma.role.findMany({
-    orderBy: { roleName: "asc" },
-    include: {
-      rolePermissions: { select: { permission: { select: { permissionKey: true } } } },
-      _count: { select: { userRoles: true } },
-    },
-  });
+export function listRoles() {
+  return listRoleDefinitions();
 }
 
 export async function listPermissionCatalogue() {
   return prisma.permission.findMany({ orderBy: [{ module: "asc" }, { permissionKey: "asc" }] });
 }
 
-export async function createRole(actor: AuthUser, input: z.infer<typeof roleSchema>, correlationId?: string) {
-  return prisma.$transaction(async (tx) => {
-    const role = await tx.role.create({
-      data: { roleName: input.roleName, description: input.description ?? null, isActive: input.isActive ?? true },
-    });
-    await audit(tx, { actorUserId: actor.id, action: "role.create", entityType: "role", entityId: role.id, after: input, correlationId });
-    return role;
-  });
+const USER_ACCESS_SELECT = {
+  id: true,
+  employeeCode: true,
+  fullName: true,
+  email: true,
+  department: true,
+  designation: true,
+  isActive: true,
+  role: true,
+  permissions: true,
+} satisfies Prisma.UserSelect;
+
+/** Shape a user row for the API: role name resolved, permissions as an array of IDs. */
+function toUserAccess(u: Prisma.UserGetPayload<{ select: typeof USER_ACCESS_SELECT }>) {
+  return { ...u, roleName: roleName(u.role), permissions: parsePermissionIds(u.permissions) };
 }
 
-export async function updateRole(actor: AuthUser, id: number, input: Partial<z.infer<typeof roleSchema>>, correlationId?: string) {
-  return prisma.$transaction(async (tx) => {
-    const before = await tx.role.findUnique({ where: { id } });
-    if (!before) throw notFound("Role");
-    const role = await tx.role.update({
-      where: { id },
-      data: {
-        ...(input.roleName !== undefined ? { roleName: input.roleName } : {}),
-        ...(input.description !== undefined ? { description: input.description } : {}),
-        ...(input.isActive !== undefined ? { isActive: input.isActive } : {}),
-      },
-    });
-    await audit(tx, { actorUserId: actor.id, action: "role.update", entityType: "role", entityId: id, before, after: role, correlationId });
-    return role;
-  });
+async function permissionIdsForKeys(tx: Tx, keys: readonly string[]) {
+  const unique = Array.from(new Set(keys));
+  const perms = await tx.permission.findMany({ where: { permissionKey: { in: unique } }, select: { id: true } });
+  if (perms.length !== unique.length) {
+    throw new AppError("VALIDATION_ERROR", "Unknown permission key. Run `npm run seed` to sync the permission catalogue.");
+  }
+  return perms.map((p) => p.id);
 }
 
-/** Replace a role's permission set with exactly the given keys (explicit, audited). */
-export async function setRolePermissions(actor: AuthUser, roleId: number, keys: string[], correlationId?: string) {
+/** An administrator may not strip their own ability to manage user access. */
+async function guardSelfLockout(tx: Tx, actor: AuthUser, userId: number, nextIds: number[]) {
+  if (userId !== actor.id) return;
+  const manage = await tx.permission.findUnique({ where: { permissionKey: "admin.roles.manage" }, select: { id: true } });
+  if (manage && !nextIds.includes(manage.id)) {
+    throw new AppError("VALIDATION_ERROR", "You cannot remove your own user-access administration permission");
+  }
+}
+
+export const userRoleSchema = z.object({
+  role: z.string().refine(isRoleKey, "Unknown role").nullable(),
+  /** true (default) replaces the user's permissions with the role's default set. */
+  applyDefaults: z.boolean().default(true),
+});
+
+export async function setUserRole(actor: AuthUser, userId: number, input: z.infer<typeof userRoleSchema>, correlationId?: string) {
   return prisma.$transaction(async (tx) => {
-    const role = await tx.role.findUnique({
-      where: { id: roleId },
-      include: { rolePermissions: { include: { permission: true } } },
-    });
-    if (!role) throw notFound("Role");
-    const perms = await tx.permission.findMany({ where: { permissionKey: { in: keys } } });
-    if (perms.length !== new Set(keys).size) throw new AppError("VALIDATION_ERROR", "Unknown permission key in request");
+    const before = await tx.user.findUnique({ where: { id: userId }, select: { role: true, permissions: true } });
+    if (!before) throw notFound("User");
+    const role = input.role as RoleKey | null;
 
-    const before = role.rolePermissions.map((rp) => rp.permission.permissionKey).sort();
-    const wanted = new Set(perms.map((p) => p.id));
-    const current = new Set(role.rolePermissions.map((rp) => rp.permissionId));
-
-    const toRemove = Array.from(current).filter((id) => !wanted.has(id));
-    const toAdd = Array.from(wanted).filter((id) => !current.has(id));
-    if (toRemove.length) await tx.rolePermission.deleteMany({ where: { roleId, permissionId: { in: toRemove } } });
-    for (const permissionId of toAdd) await tx.rolePermission.create({ data: { roleId, permissionId } });
-
+    let permissions = before.permissions;
+    if (input.applyDefaults) {
+      const ids = role ? await permissionIdsForKeys(tx, roles[role].defaultPermissions) : [];
+      await guardSelfLockout(tx, actor, userId, ids);
+      permissions = serializePermissionIds(ids);
+    }
+    const user = await tx.user.update({ where: { id: userId }, data: { role, permissions }, select: USER_ACCESS_SELECT });
     await audit(tx, {
       actorUserId: actor.id,
-      action: "role.permissions.set",
-      entityType: "role",
-      entityId: roleId,
+      action: "user.role.set",
+      entityType: "user",
+      entityId: userId,
       before,
-      after: [...keys].sort(),
+      after: { role, permissions },
       correlationId,
     });
-    return { added: toAdd.length, removed: toRemove.length };
+    return toUserAccess(user);
   });
 }
 
-// ── Users (existing users table — read only, plus role assignment) ──
+export const userPermissionsSchema = z.object({ permissions: z.array(z.string().max(100)).max(500) });
+
+/** Replace a user's permissions with exactly the given keys (stored as permission IDs). */
+export async function setUserPermissions(actor: AuthUser, userId: number, keys: string[], correlationId?: string) {
+  return prisma.$transaction(async (tx) => {
+    const before = await tx.user.findUnique({ where: { id: userId }, select: { permissions: true } });
+    if (!before) throw notFound("User");
+    const ids = await permissionIdsForKeys(tx, keys);
+    await guardSelfLockout(tx, actor, userId, ids);
+    const permissions = serializePermissionIds(ids);
+    const user = await tx.user.update({ where: { id: userId }, data: { permissions }, select: USER_ACCESS_SELECT });
+    await audit(tx, {
+      actorUserId: actor.id,
+      action: "user.permissions.set",
+      entityType: "user",
+      entityId: userId,
+      before: { permissions: before.permissions },
+      after: { permissions },
+      correlationId,
+    });
+    return toUserAccess(user);
+  });
+}
+
+// ── Users (existing users table) ──
 
 export async function searchUsers(p: Pagination & { activeOnly?: boolean }) {
   const where: Prisma.UserWhereInput = {
@@ -106,68 +128,10 @@ export async function searchUsers(p: Pagination & { activeOnly?: boolean }) {
       : {}),
   };
   const [items, total] = await Promise.all([
-    prisma.user.findMany({
-      where,
-      orderBy: { fullName: "asc" },
-      ...skipTake(p),
-      select: {
-        id: true,
-        employeeCode: true,
-        fullName: true,
-        email: true,
-        department: true,
-        designation: true,
-        isActive: true,
-        userRoles: { select: { role: { select: { id: true, roleName: true } } } },
-      },
-    }),
+    prisma.user.findMany({ where, orderBy: { fullName: "asc" }, ...skipTake(p), select: USER_ACCESS_SELECT }),
     prisma.user.count({ where }),
   ]);
-  return { items, total };
-}
-
-export async function assignRole(actor: AuthUser, userId: number, roleId: number, correlationId?: string) {
-  return prisma.$transaction(async (tx) => {
-    const user = await tx.user.findUnique({ where: { id: userId }, select: { id: true } });
-    if (!user) throw notFound("User");
-    const role = await tx.role.findUnique({ where: { id: roleId } });
-    if (!role) throw notFound("Role");
-    const existing = await tx.userRole.findUnique({ where: { userId_roleId: { userId, roleId } } });
-    if (existing) throw conflict("User already has this role");
-    await tx.userRole.create({ data: { userId, roleId, assignedByUserId: actor.id } });
-    await audit(tx, {
-      actorUserId: actor.id,
-      action: "user.role.assign",
-      entityType: "user",
-      entityId: userId,
-      after: { roleId, roleName: role.roleName },
-      correlationId,
-    });
-  });
-}
-
-export async function removeRole(actor: AuthUser, userId: number, roleId: number, correlationId?: string) {
-  return prisma.$transaction(async (tx) => {
-    if (userId === actor.id) {
-      const role = await tx.role.findUnique({
-        where: { id: roleId },
-        include: { rolePermissions: { include: { permission: true } } },
-      });
-      if (role?.rolePermissions.some((rp) => rp.permission.permissionKey === "admin.roles.manage")) {
-        throw new AppError("VALIDATION_ERROR", "You cannot remove your own role-administration role");
-      }
-    }
-    const r = await tx.userRole.deleteMany({ where: { userId, roleId } });
-    if (r.count === 0) throw notFound("Role assignment");
-    await audit(tx, {
-      actorUserId: actor.id,
-      action: "user.role.remove",
-      entityType: "user",
-      entityId: userId,
-      before: { roleId },
-      correlationId,
-    });
-  });
+  return { items: items.map(toUserAccess), total };
 }
 
 // ── Workflows (versioned; edits create a new version) ──
@@ -186,7 +150,7 @@ export const workflowSchema = z.object({
         stageOrder: z.coerce.number().int().min(1).max(50),
         name: z.string().trim().min(2).max(150),
         approverType: z.enum([APPROVER_TYPE.MANAGER, APPROVER_TYPE.ROLE]),
-        roleId: z.coerce.number().int().positive().nullable().optional(),
+        roleKey: z.string().refine(isRoleKey, "Unknown role").nullable().optional(),
         dueDays: z.coerce.number().int().min(1).max(60).default(3),
       })
     )
@@ -198,7 +162,7 @@ export async function listWorkflows() {
   return prisma.approvalWorkflow.findMany({
     orderBy: [{ workflowKey: "asc" }, { version: "desc" }],
     include: {
-      stages: { orderBy: [{ stageOrder: "asc" }, { id: "asc" }], include: { role: { select: { roleName: true } } } },
+      stages: { orderBy: [{ stageOrder: "asc" }, { id: "asc" }] },
       _count: { select: { requests: true } },
     },
   });
@@ -207,7 +171,7 @@ export async function listWorkflows() {
 /** Saving a workflow always creates a new version and deactivates older ones. History is never rewritten. */
 export async function saveWorkflowVersion(actor: AuthUser, input: WorkflowInput, correlationId?: string) {
   for (const s of input.stages) {
-    if (s.approverType === APPROVER_TYPE.ROLE && !s.roleId) {
+    if (s.approverType === APPROVER_TYPE.ROLE && !s.roleKey) {
       throw new AppError("VALIDATION_ERROR", `Stage "${s.name}" needs a role`);
     }
   }
@@ -237,7 +201,7 @@ export async function saveWorkflowVersion(actor: AuthUser, input: WorkflowInput,
             stageOrder: s.stageOrder,
             name: s.name,
             approverType: s.approverType,
-            roleId: s.approverType === APPROVER_TYPE.ROLE ? s.roleId ?? null : null,
+            roleKey: s.approverType === APPROVER_TYPE.ROLE ? s.roleKey ?? null : null,
             dueDays: s.dueDays,
           })),
         },

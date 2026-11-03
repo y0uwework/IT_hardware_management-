@@ -150,13 +150,9 @@ export function Header({ user, onMenu }: { user: AuthUser; onMenu: () => void })
                 {user.employeeCode}
                 {user.department ? ` · ${user.department}` : ""}
               </p>
-              {user.roles.length > 0 && (
+              {user.roleName && (
                 <p className="mt-2 flex flex-wrap gap-1">
-                  {user.roles.map((r) => (
-                    <span key={r} className="rounded-sm bg-neutral-100 px-1.5 py-0.5 text-caption text-neutral-700">
-                      {r}
-                    </span>
-                  ))}
+                  <span className="rounded-sm bg-neutral-100 px-1.5 py-0.5 text-caption text-neutral-700">{user.roleName}</span>
                 </p>
               )}
             </div>
