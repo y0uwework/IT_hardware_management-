@@ -41,7 +41,7 @@ export function Sidebar({
             </span>
             <span className="font-headline text-lg font-bold leading-tight">
               {appConfig.shortName}
-              <span className="block text-caption font-normal text-neutral-500">Hardware Management</span>
+              <span className="block text-caption font-normal text-neutral-500">Asset Management</span>
             </span>
           </Link>
           <button onClick={onClose} className="rounded-full p-2 text-neutral-500 hover:bg-neutral-100 lg:hidden" aria-label="Close menu">

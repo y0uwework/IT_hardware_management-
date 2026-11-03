@@ -30,7 +30,7 @@ export const sidebarConfig: SidebarItem[] = [
     permission: "dashboard.view",
   },
   {
-    label: "Hardware Requests",
+    label: "Asset Requests",
     route: "/requests",
     icon: "ClipboardList",
     permission: "request.view",
@@ -40,12 +40,6 @@ export const sidebarConfig: SidebarItem[] = [
     route: "/approvals",
     icon: "CheckCircle",
     permission: "request.approve",
-  },
-  {
-    label: "My Assets",
-    route: "/assets/mine",
-    icon: "Laptop",
-    permission: "asset.view",
   },
   {
     label: "Inventory",

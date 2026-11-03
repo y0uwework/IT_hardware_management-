@@ -24,17 +24,17 @@ export const permissions = [
   {
     key: "request.create",
     module: "Requests",
-    description: "Create hardware requests",
+    description: "Create asset requests",
   },
   {
     key: "request.view",
     module: "Requests",
-    description: "View own and authorized hardware requests",
+    description: "View own and authorized asset requests",
   },
   {
     key: "request.view.all",
     module: "Requests",
-    description: "View all hardware requests across the organization",
+    description: "View all asset requests across the organization",
   },
   {
     key: "request.it_review",
@@ -45,7 +45,7 @@ export const permissions = [
   {
     key: "request.approve",
     module: "Approvals",
-    description: "Approve hardware requests",
+    description: "Approve asset requests",
   },
   {
     key: "approve.button",

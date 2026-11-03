@@ -41,7 +41,7 @@ export function MainLayout({
         <Sidebar permissions={user.permissions} open={menuOpen} onClose={() => setMenuOpen(false)} />
         <div className="flex min-w-0 flex-1 flex-col">
           <Header user={user} onMenu={() => setMenuOpen(true)} />
-          <main id="main" className="mx-auto w-full max-w-7xl flex-1 px-4 py-6 sm:px-6 lg:px-10 lg:py-10">
+          <main id="main" className="mx-auto w-full flex-1 px-4 py-6 sm:px-6 lg:px-10 lg:py-10">
             {forbidden ? <ForbiddenState /> : children}
           </main>
         </div>
