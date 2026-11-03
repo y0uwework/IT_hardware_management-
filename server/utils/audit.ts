@@ -1,4 +1,4 @@
-import type { Tx } from "../../lib/prisma";
+import { execute, type Tx } from "../../lib/db";
 
 const SENSITIVE_KEYS = /password|token|secret|hash/i;
 
@@ -23,8 +23,11 @@ export interface AuditEntry {
 
 /** Write an audit record inside the caller's transaction. */
 export async function audit(tx: Tx, entry: AuditEntry) {
-  await tx.auditLog.create({
-    data: {
+  await execute(
+    tx,
+    `INSERT INTO dbo.audit_logs (actor_user_id, [action], entity_type, entity_id, before_json, after_json, correlation_id)
+     VALUES (@actorUserId, @action, @entityType, @entityId, @beforeJson, @afterJson, @correlationId)`,
+    {
       actorUserId: entry.actorUserId,
       action: entry.action,
       entityType: entry.entityType,
@@ -32,6 +35,6 @@ export async function audit(tx: Tx, entry: AuditEntry) {
       beforeJson: scrub(entry.before),
       afterJson: scrub(entry.after),
       correlationId: entry.correlationId ?? null,
-    },
-  });
+    }
+  );
 }

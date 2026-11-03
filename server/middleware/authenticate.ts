@@ -1,6 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { randomUUID } from "crypto";
-import { Prisma } from "@prisma/client";
+import { isConnectionError, sqlErrorNumber } from "../../lib/db";
 import type { PermissionKey } from "../../config/permissions.config";
 import { getAuthUser, type AuthUser } from "../../lib/auth";
 import { AppError } from "../../lib/errors";
@@ -49,9 +49,19 @@ function assertSameOrigin(req: NextApiRequest) {
 
 function toAppError(error: unknown, correlationId: string): AppError {
   if (error instanceof AppError) return error;
-  if (error instanceof Prisma.PrismaClientKnownRequestError) {
-    if (error.code === "P2002") return new AppError("CONFLICT", "A record with the same unique value already exists");
-    if (error.code === "P2025") return new AppError("NOT_FOUND", "Record not found");
+  const sqlNumber = sqlErrorNumber(error);
+  if (sqlNumber === 2627 || sqlNumber === 2601) {
+    return new AppError("CONFLICT", "A record with the same unique value already exists");
+  }
+  if (sqlNumber === 547) {
+    return new AppError("CONFLICT", "This change conflicts with related records");
+  }
+  if (isConnectionError(error)) {
+    logger.error("Database unavailable", {
+      correlationId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return new AppError("SERVICE_UNAVAILABLE", `The database is unavailable. Please try again shortly. Reference: ${correlationId}`);
   }
   logger.error("Unhandled API error", {
     correlationId,

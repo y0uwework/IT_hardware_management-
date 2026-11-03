@@ -2,6 +2,8 @@
 const nextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
+  // Load the SQL Server drivers with Node's require instead of bundling them (bundling breaks mssql).
+  serverExternalPackages: ["mssql", "tedious", "msnodesqlv8"],
   async headers() {
     return [
       {

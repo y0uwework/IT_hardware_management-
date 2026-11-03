@@ -7,6 +7,7 @@ export type ErrorCode =
   | "INVALID_TRANSITION"
   | "METHOD_NOT_ALLOWED"
   | "NOT_IMPLEMENTED"
+  | "SERVICE_UNAVAILABLE"
   | "INTERNAL_ERROR";
 
 const STATUS_BY_CODE: Record<ErrorCode, number> = {
@@ -18,6 +19,7 @@ const STATUS_BY_CODE: Record<ErrorCode, number> = {
   INVALID_TRANSITION: 409,
   METHOD_NOT_ALLOWED: 405,
   NOT_IMPLEMENTED: 501,
+  SERVICE_UNAVAILABLE: 503,
   INTERNAL_ERROR: 500,
 };
 

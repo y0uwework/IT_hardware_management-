@@ -1,5 +1,6 @@
-import { prisma, type Tx } from "../../lib/prisma";
+import { execute, getPool, query, queryOne, type Tx } from "../../lib/db";
 import { notFound } from "../../lib/errors";
+import { notificationCols } from "../utils/sql-columns";
 
 export const NOTIFICATION_EVENT = {
   REQUEST_SUBMITTED: "request.submitted",
@@ -16,40 +17,54 @@ export async function notify(
   tx: Tx,
   input: { recipientUserId: number; eventType: string; title: string; body?: string; link?: string }
 ) {
-  await tx.notification.create({
-    data: {
+  await execute(
+    tx,
+    `INSERT INTO dbo.notifications (recipient_user_id, event_type, title, body, link)
+     VALUES (@recipientUserId, @eventType, @title, @body, @link)`,
+    {
       recipientUserId: input.recipientUserId,
       eventType: input.eventType,
       title: input.title,
       body: input.body ?? null,
       link: input.link ?? null,
-    },
-  });
+    }
+  );
 }
 
 export async function listNotifications(userId: number, take = 20) {
-  const [items, unread] = await Promise.all([
-    prisma.notification.findMany({
-      where: { recipientUserId: userId },
-      orderBy: { createdAt: "desc" },
-      take,
-    }),
-    prisma.notification.count({ where: { recipientUserId: userId, readAt: null } }),
+  const pool = await getPool();
+  const [items, counts] = await Promise.all([
+    query(
+      pool,
+      `SELECT TOP (@take) ${notificationCols("n")}
+       FROM dbo.notifications n
+       WHERE n.recipient_user_id = @userId
+       ORDER BY n.created_at DESC, n.id DESC`,
+      { userId, take }
+    ),
+    queryOne<{ unread: number }>(
+      pool,
+      `SELECT COUNT(*) AS unread FROM dbo.notifications WHERE recipient_user_id = @userId AND read_at IS NULL`,
+      { userId }
+    ),
   ]);
-  return { items, unread };
+  return { items, unread: counts?.unread ?? 0 };
 }
 
 export async function markRead(userId: number, id: number | "all") {
+  const pool = await getPool();
   if (id === "all") {
-    await prisma.notification.updateMany({
-      where: { recipientUserId: userId, readAt: null },
-      data: { readAt: new Date() },
-    });
+    await execute(
+      pool,
+      `UPDATE dbo.notifications SET read_at = SYSUTCDATETIME() WHERE recipient_user_id = @userId AND read_at IS NULL`,
+      { userId }
+    );
     return;
   }
-  const r = await prisma.notification.updateMany({
-    where: { id, recipientUserId: userId },
-    data: { readAt: new Date() },
-  });
-  if (r.count === 0) throw notFound("Notification");
+  const count = await execute(
+    pool,
+    `UPDATE dbo.notifications SET read_at = SYSUTCDATETIME() WHERE id = @id AND recipient_user_id = @userId`,
+    { id, userId }
+  );
+  if (count === 0) throw notFound("Notification");
 }

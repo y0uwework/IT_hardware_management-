@@ -8,7 +8,7 @@ against a shared or production database.
 
 ## 1. Existing `users` table (employee master, reused, never recreated)
 
-| HMS field (`prisma/schema.prisma` → `User`) | Assumed column | Assumed type | Confirmed? |
+| API field (`lib/auth.ts`, services) | Assumed column | Assumed type | Confirmed? |
 |---|---|---|---|
 | `id` | `id` | `INT IDENTITY(1,1)` PK | ☐ ASSUMED |
 | `employeeCode` | `employee_code` | `NVARCHAR(50)` | ☐ ASSUMED |
@@ -22,17 +22,16 @@ against a shared or production database.
 
 **If the real table differs:**
 
-1. Change the `User` model's `@map(...)` names and `@db.*` types to match. If
-   department or manager live in other tables, model those tables and adjust
-   `lib/auth.ts`, `approval.service.ts` (manager resolution) and `dashboard.service.ts`.
+1. Change the column names in the SQL that reads `dbo.users` (`lib/auth.ts`,
+   `admin.service.ts`, `approval.service.ts`, and the `users` joins in the other services).
+   If department or manager live in other tables, join those tables instead.
 2. If `users.id` is not `INT` (for example `UNIQUEIDENTIFIER` or `BIGINT`), change
-   **every** `*UserId` field in `schema.prisma` to the same type. These are
-   `requesterUserId`, `approverUserId`, `actorUserId`, `userId`, `issuedByUserId`,
-   `createdByUserId`, `assignedByUserId`, `reviewedByUserId`, `recipientUserId`,
-   `returnedToUserId` and `delegatedFromUserId`. Then regenerate the baseline migration.
+   **every** `*_user_id` column in `database/migrations/` to the same type (requester,
+   approver, actor, user, issued_by, created_by, reviewed_by, recipient, returned_to,
+   delegated_from). Once a migration has been applied, change types with a new migration.
 3. Update the guarded `CREATE TABLE users` block in
-   `prisma/migrations/20261102000000_init_hms/migration.sql` so it matches. It only
-   runs where `users` doesn't exist (local dev and Prisma's shadow DB).
+   `database/migrations/0001_users_and_permissions.sql` so it matches. It only runs
+   where `users` doesn't exist (local development).
 
 ## 2. Authentication (ASSUMED: none reusable yet)
 
@@ -57,7 +56,7 @@ HMS creates only the `permissions` table. Roles are defined in code
   default permissions here; administrators can then adjust them per user.
 
 **This means HMS adds two columns to the existing `users` table** (migration
-`20261103000000_roles_in_code`, guarded with `COL_LENGTH` checks). Confirm this is
+`0001_users_and_permissions.sql`, guarded with `COL_LENGTH` checks). Confirm this is
 acceptable for the organization's employee master before deploying to production.
 
 ## 4. Organizational masters (ASSUMED: none)
@@ -71,8 +70,8 @@ Swap these for FKs to existing master tables once they are identified.
 ## 5. Checklist before the first shared-database migration (PRD §11.4)
 
 - [ ] Real `users` definition captured (`sp_help 'dbo.users'`) and this doc updated
-- [ ] `User` model and every `*UserId` type corrected
+- [ ] `users` column names in the SQL and every `*_user_id` type corrected
 - [ ] Existing auth / RBAC / org tables identified and mapped
-- [ ] `prisma migrate diff` re-run and the baseline SQL reviewed
+- [ ] `database/migrations/*.sql` reviewed against the real schema
 - [ ] Migration applied to a **copy** of the database; existing logins still work
 - [ ] Backup taken before production

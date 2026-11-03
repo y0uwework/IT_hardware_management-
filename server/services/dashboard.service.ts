@@ -1,4 +1,4 @@
-import { prisma } from "../../lib/prisma";
+import { getPool, query, queryMany, queryOne } from "../../lib/db";
 import type { AuthUser } from "../../lib/auth";
 import { userHas } from "../middleware/authorize";
 import {
@@ -23,84 +23,121 @@ const OPEN_REQUEST_STATUSES = [
  * (Replaces separate per-role endpoints; a user with several roles gets all their sections.)
  */
 export async function getDashboard(user: AuthUser) {
+  const pool = await getPool();
   const out: Record<string, unknown> = {};
+  const sections: Promise<void>[] = [];
 
   if (userHas(user, "request.view")) {
-    const [open, needsAction, recent] = await Promise.all([
-      prisma.hardwareRequest.count({ where: { requesterUserId: user.id, status: { in: OPEN_REQUEST_STATUSES } } }),
-      prisma.hardwareRequest.count({
-        where: { requesterUserId: user.id, status: { in: [REQUEST_STATUS.DRAFT, REQUEST_STATUS.RETURNED] } },
-      }),
-      prisma.hardwareRequest.findMany({
-        where: { requesterUserId: user.id },
-        orderBy: { createdAt: "desc" },
-        take: 5,
-        select: { id: true, requestNumber: true, purpose: true, status: true, createdAt: true },
-      }),
-    ]);
-    out.myRequests = { open, needsAction, recent };
+    sections.push(
+      queryMany(
+        pool,
+        `SELECT
+           SUM(CASE WHEN status IN (@open) THEN 1 ELSE 0 END) AS [open],
+           SUM(CASE WHEN status IN (@needsAction) THEN 1 ELSE 0 END) AS needsAction
+         FROM dbo.hardware_requests WHERE requester_user_id = @userId;
+
+         SELECT TOP 5 id, request_number AS requestNumber, purpose, status, created_at AS createdAt
+         FROM dbo.hardware_requests WHERE requester_user_id = @userId
+         ORDER BY created_at DESC, id DESC;`,
+        {
+          userId: user.id,
+          open: OPEN_REQUEST_STATUSES,
+          needsAction: [REQUEST_STATUS.DRAFT, REQUEST_STATUS.RETURNED],
+        }
+      ).then(([[counts], recent]) => {
+        out.myRequests = { open: counts?.open ?? 0, needsAction: counts?.needsAction ?? 0, recent };
+      })
+    );
   }
 
   if (userHas(user, "asset.view")) {
-    const [assigned, pendingAck] = await Promise.all([
-      prisma.assetAssignment.count({ where: { userId: user.id, isActive: true } }),
-      prisma.assetAssignment.count({ where: { userId: user.id, isActive: true, acknowledgedAt: null } }),
-    ]);
-    out.myAssets = { assigned, pendingAck };
+    sections.push(
+      queryOne(
+        pool,
+        `SELECT COUNT(*) AS assigned, SUM(CASE WHEN acknowledged_at IS NULL THEN 1 ELSE 0 END) AS pendingAck
+         FROM dbo.asset_assignments WHERE user_id = @userId AND is_active = 1`,
+        { userId: user.id }
+      ).then((r) => {
+        out.myAssets = { assigned: r?.assigned ?? 0, pendingAck: r?.pendingAck ?? 0 };
+      })
+    );
   }
 
   if (userHas(user, "request.approve")) {
-    const [pending, overdue] = await Promise.all([
-      prisma.approvalTask.count({ where: { approverUserId: user.id, status: APPROVAL_STATUS.PENDING } }),
-      prisma.approvalTask.count({
-        where: { approverUserId: user.id, status: APPROVAL_STATUS.PENDING, dueAt: { lt: new Date() } },
-      }),
-    ]);
-    out.approvals = { pending, overdue };
+    sections.push(
+      queryOne(
+        pool,
+        `SELECT COUNT(*) AS pending, SUM(CASE WHEN due_at < SYSUTCDATETIME() THEN 1 ELSE 0 END) AS overdue
+         FROM dbo.approval_tasks WHERE approver_user_id = @userId AND status = @pending`,
+        { userId: user.id, pending: APPROVAL_STATUS.PENDING }
+      ).then((r) => {
+        out.approvals = { pending: r?.pending ?? 0, overdue: r?.overdue ?? 0 };
+      })
+    );
   }
 
   if (userHas(user, "request.it_review")) {
-    const [awaitingReview, inFulfilment, activeReservations] = await Promise.all([
-      prisma.hardwareRequest.count({ where: { status: REQUEST_STATUS.APPROVED } }),
-      prisma.hardwareRequest.count({
-        where: {
-          status: {
-            in: [REQUEST_STATUS.UNDER_IT_REVIEW, REQUEST_STATUS.AWAITING_PROCUREMENT, REQUEST_STATUS.PARTIALLY_FULFILLED],
-          },
-        },
-      }),
-      prisma.inventoryReservation.count({ where: { status: RESERVATION_STATUS.ACTIVE } }),
-    ]);
-    out.itQueue = { awaitingReview, inFulfilment, activeReservations };
+    sections.push(
+      queryOne(
+        pool,
+        `SELECT
+           (SELECT COUNT(*) FROM dbo.hardware_requests WHERE status = @approved) AS awaitingReview,
+           (SELECT COUNT(*) FROM dbo.hardware_requests WHERE status IN (@inFulfilment)) AS inFulfilment,
+           (SELECT COUNT(*) FROM dbo.inventory_reservations WHERE status = @active) AS activeReservations`,
+        {
+          approved: REQUEST_STATUS.APPROVED,
+          inFulfilment: [REQUEST_STATUS.UNDER_IT_REVIEW, REQUEST_STATUS.AWAITING_PROCUREMENT, REQUEST_STATUS.PARTIALLY_FULFILLED],
+          active: RESERVATION_STATUS.ACTIVE,
+        }
+      ).then((r) => {
+        out.itQueue = {
+          awaitingReview: r?.awaitingReview ?? 0,
+          inFulfilment: r?.inFulfilment ?? 0,
+          activeReservations: r?.activeReservations ?? 0,
+        };
+      })
+    );
   }
 
   if (userHas(user, "asset.view.all")) {
-    const grouped = await prisma.asset.groupBy({ by: ["status"], _count: { _all: true } });
-    const byStatus = Object.fromEntries(grouped.map((g) => [g.status, g._count._all]));
-    const soon = new Date(Date.now() + 60 * 86_400_000);
-    const warrantyExpiring = await prisma.asset.count({
-      where: {
-        warrantyEndDate: { gte: new Date(), lte: soon },
-        status: { notIn: [ASSET_STATUS.RETIRED, ASSET_STATUS.DISPOSED] },
-      },
-    });
-    out.assetSummary = { byStatus, warrantyExpiring };
+    sections.push(
+      queryMany(
+        pool,
+        `SELECT status, COUNT(*) AS n FROM dbo.assets GROUP BY status;
+
+         SELECT COUNT(*) AS n FROM dbo.assets
+         WHERE warranty_end_date >= CAST(SYSUTCDATETIME() AS date)
+           AND warranty_end_date <= DATEADD(day, 60, CAST(SYSUTCDATETIME() AS date))
+           AND status NOT IN (@excluded);`,
+        { excluded: [ASSET_STATUS.RETIRED, ASSET_STATUS.DISPOSED] }
+      ).then(([grouped, [expiring]]) => {
+        out.assetSummary = {
+          byStatus: Object.fromEntries(grouped.map((g) => [g.status, g.n])),
+          warrantyExpiring: expiring?.n ?? 0,
+        };
+      })
+    );
   }
 
   if (userHas(user, "inventory.view")) {
-    const low = await prisma.inventoryStock.findMany({
-      where: { quantityAvailable: { lte: 2 }, category: { isActive: true } },
-      take: 8,
-      orderBy: { quantityAvailable: "asc" },
-      select: {
-        quantityAvailable: true,
-        quantityReserved: true,
-        category: { select: { name: true } },
-        warehouse: { select: { name: true } },
-      },
-    });
-    out.lowStock = low;
+    sections.push(
+      query(
+        pool,
+        `SELECT TOP 8 s.quantity_available AS quantityAvailable, s.quantity_reserved AS quantityReserved,
+                c.name AS [category.name], w.name AS [warehouse.name]
+         FROM dbo.inventory_stock s
+         JOIN dbo.hardware_categories c ON c.id = s.category_id
+         JOIN dbo.warehouses w ON w.id = s.warehouse_id
+         WHERE s.quantity_available <= 2 AND c.is_active = 1
+         ORDER BY s.quantity_available, s.id`
+      ).then((low) => {
+        out.lowStock = low;
+      })
+    );
   }
 
-  return out;
+  await Promise.all(sections);
+  // Keep the section order stable for the client.
+  const order = ["myRequests", "myAssets", "approvals", "itQueue", "assetSummary", "lowStock"];
+  return Object.fromEntries(order.filter((k) => k in out).map((k) => [k, out[k]]));
 }

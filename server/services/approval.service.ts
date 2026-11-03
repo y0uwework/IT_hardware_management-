@@ -1,4 +1,4 @@
-import { prisma, type Tx } from "../../lib/prisma";
+import { Where, execute, getPool, likeContains, query, queryMany, queryOne, withTransaction, type Tx } from "../../lib/db";
 import { AppError, conflict, forbidden, invalidTransition, notFound } from "../../lib/errors";
 import type { AuthUser } from "../../lib/auth";
 import {
@@ -10,6 +10,7 @@ import {
 } from "../../config/status.config";
 import { appConfig } from "../../config/app.config";
 import { audit } from "../utils/audit";
+import { historyCols, itemCols, requestCols, taskCols } from "../utils/sql-columns";
 import { notify, NOTIFICATION_EVENT } from "./notification.service";
 import {
   estimateRequestAmount,
@@ -23,10 +24,50 @@ import { skipTake } from "../../lib/validation";
 export const APPROVER_TYPE = { MANAGER: "MANAGER", ROLE: "ROLE" } as const;
 export type ApprovalAction = "approve" | "reject" | "return";
 
-const num = (d: { toString(): string } | null) => (d === null ? null : Number(d.toString()));
+interface Stage {
+  id: number;
+  workflowId: number;
+  stageOrder: number;
+  name: string;
+  approverType: string;
+  roleKey: string | null;
+  dueDays: number;
+}
+
+const STAGE_SELECT = `s.id, s.workflow_id AS workflowId, s.stage_order AS stageOrder, s.name,
+  s.approver_type AS approverType, s.role_key AS roleKey, s.due_days AS dueDays`;
 
 function addDays(days: number) {
   return new Date(Date.now() + days * 86_400_000);
+}
+
+/** Append an entry to a request's approval history. */
+export async function recordHistory(
+  tx: Tx,
+  h: {
+    hardwareRequestId: number;
+    actorUserId: number;
+    action: string;
+    taskId?: number | null;
+    stageName?: string | null;
+    workflowVersion?: number | null;
+    comments?: string | null;
+  }
+) {
+  await execute(
+    tx,
+    `INSERT INTO dbo.approval_history (hardware_request_id, task_id, stage_name, workflow_version, actor_user_id, [action], comments)
+     VALUES (@hardwareRequestId, @taskId, @stageName, @workflowVersion, @actorUserId, @action, @comments)`,
+    {
+      hardwareRequestId: h.hardwareRequestId,
+      taskId: h.taskId ?? null,
+      stageName: h.stageName ?? null,
+      workflowVersion: h.workflowVersion ?? null,
+      actorUserId: h.actorUserId,
+      action: h.action,
+      comments: h.comments ?? null,
+    }
+  );
 }
 
 /** Resolve approver user IDs for a stage. The requester can never approve their own request. */
@@ -38,16 +79,14 @@ async function resolveApprovers(
   let ids: number[] = [];
   if (stage.approverType === APPROVER_TYPE.MANAGER) {
     if (requester.managerId) {
-      const mgr = await tx.user.findFirst({
-        where: { id: requester.managerId, isActive: true },
-        select: { id: true },
+      const mgr = await queryOne<{ id: number }>(tx, `SELECT id FROM dbo.users WHERE id = @id AND is_active = 1`, {
+        id: requester.managerId,
       });
       if (mgr) ids = [mgr.id];
     }
   } else if (stage.approverType === APPROVER_TYPE.ROLE && stage.roleKey) {
-    const holders = await tx.user.findMany({
-      where: { role: stage.roleKey, isActive: true },
-      select: { id: true },
+    const holders = await query<{ id: number }>(tx, `SELECT id FROM dbo.users WHERE role = @role AND is_active = 1`, {
+      role: stage.roleKey,
     });
     ids = holders.map((h) => h.id);
   }
@@ -64,22 +103,26 @@ async function resolveApprovers(
 async function createTasksForStageGroup(
   tx: Tx,
   request: { id: number; requestNumber: string; requester: { id: number; managerId: number | null; fullName: string } },
-  stages: { id: number; name: string; approverType: string; roleKey: string | null; dueDays: number }[],
+  stages: Stage[],
   cycle: number
 ) {
   for (const stage of stages) {
     const approverIds = await resolveApprovers(tx, stage, request.requester);
     for (const approverUserId of approverIds) {
-      const task = await tx.approvalTask.create({
-        data: {
+      const task = (await queryOne<{ id: number }>(
+        tx,
+        `INSERT INTO dbo.approval_tasks (hardware_request_id, stage_id, approver_user_id, cycle, status, due_at)
+         OUTPUT INSERTED.id
+         VALUES (@hardwareRequestId, @stageId, @approverUserId, @cycle, @status, @dueAt)`,
+        {
           hardwareRequestId: request.id,
           stageId: stage.id,
           approverUserId,
           cycle,
           status: APPROVAL_STATUS.PENDING,
           dueAt: addDays(stage.dueDays || appConfig.approvalDueDays),
-        },
-      });
+        }
+      ))!;
       await notify(tx, {
         recipientUserId: approverUserId,
         eventType: NOTIFICATION_EVENT.APPROVAL_PENDING,
@@ -96,30 +139,58 @@ function setRequestStatus(from: string, to: RequestStatus) {
   return to;
 }
 
+async function updateRequest(tx: Tx, id: number, set: { status?: string; workflowId?: number }) {
+  await execute(
+    tx,
+    `UPDATE dbo.hardware_requests
+     SET status = COALESCE(@status, status), workflow_id = COALESCE(@workflowId, workflow_id), updated_at = SYSUTCDATETIME()
+     WHERE id = @id`,
+    { id, status: set.status ?? null, workflowId: set.workflowId ?? null }
+  );
+}
+
 /**
  * Called inside the submit transaction. Selects the configured workflow, records the
  * version used, and opens the first stage group. A workflow with no stages auto-approves.
  */
 export async function startApproval(tx: Tx, requestId: number, actor: AuthUser) {
-  const request = await tx.hardwareRequest.findUniqueOrThrow({
-    where: { id: requestId },
-    include: {
-      items: { select: { quantity: true, estimatedUnitPrice: true } },
-      requester: { select: { id: true, managerId: true, fullName: true, department: true } },
-    },
-  });
+  const [[request], items, workflowRows, stageRows, [last]] = await queryMany(
+    tx,
+    `SELECT r.id, r.request_number AS requestNumber, r.request_type AS requestType,
+            u.id AS [requester.id], u.manager_id AS [requester.managerId], u.full_name AS [requester.fullName],
+            u.department AS [requester.department]
+     FROM dbo.hardware_requests r JOIN dbo.users u ON u.id = r.requester_user_id
+     WHERE r.id = @requestId;
 
-  const workflows = await tx.approvalWorkflow.findMany({
-    where: { isActive: true },
-    include: { stages: { orderBy: [{ stageOrder: "asc" }, { id: "asc" }] } },
-  });
+     SELECT quantity, estimated_unit_price AS estimatedUnitPrice FROM dbo.hardware_request_items WHERE hardware_request_id = @requestId;
+
+     SELECT id, workflow_key AS workflowKey, version, request_type AS requestType, department,
+            min_amount AS minAmount, max_amount AS maxAmount, priority, is_active AS isActive
+     FROM dbo.approval_workflows WHERE is_active = 1;
+
+     SELECT ${STAGE_SELECT} FROM dbo.approval_workflow_stages s
+     JOIN dbo.approval_workflows w ON w.id = s.workflow_id AND w.is_active = 1
+     ORDER BY s.stage_order, s.id;
+
+     SELECT MAX(cycle) AS maxCycle FROM dbo.approval_tasks WHERE hardware_request_id = @requestId;`,
+    { requestId }
+  );
+  if (!request) throw notFound("Request");
+
   const amount = estimateRequestAmount(
-    request.items.map((i) => ({ quantity: i.quantity, estimatedUnitPrice: num(i.estimatedUnitPrice) }))
+    items.map((i) => ({ quantity: i.quantity, estimatedUnitPrice: i.estimatedUnitPrice === null ? null : Number(i.estimatedUnitPrice) }))
   );
-  const workflow = selectWorkflow(
-    workflows.map((w) => ({ ...w, minAmount: num(w.minAmount), maxAmount: num(w.maxAmount) })),
-    { requestType: request.requestType, department: request.requester.department, amount }
-  );
+  const workflows = workflowRows.map((w) => ({
+    ...(w as { id: number; workflowKey: string; version: number; requestType: string | null; department: string | null; priority: number; isActive: boolean }),
+    minAmount: w.minAmount === null ? null : Number(w.minAmount),
+    maxAmount: w.maxAmount === null ? null : Number(w.maxAmount),
+    stages: stageRows.filter((s) => s.workflowId === w.id) as Stage[],
+  }));
+  const workflow = selectWorkflow(workflows, {
+    requestType: request.requestType,
+    department: request.requester.department,
+    amount,
+  });
   if (!workflow) {
     throw new AppError(
       "VALIDATION_ERROR",
@@ -127,34 +198,25 @@ export async function startApproval(tx: Tx, requestId: number, actor: AuthUser) 
     );
   }
 
-  const lastCycle = await tx.approvalTask.aggregate({
-    where: { hardwareRequestId: request.id },
-    _max: { cycle: true },
-  });
-  const cycle = (lastCycle._max.cycle ?? 0) + 1;
+  const cycle = (last?.maxCycle ?? 0) + 1;
 
   const first = nextStageOrder(workflow.stages, null);
   if (first === null) {
-    await tx.hardwareRequest.update({
-      where: { id: request.id },
-      data: { workflowId: workflow.id, status: REQUEST_STATUS.APPROVED },
-    });
-    await tx.approvalHistory.create({
-      data: {
-        hardwareRequestId: request.id,
-        actorUserId: actor.id,
-        action: "Auto-approved",
-        workflowVersion: workflow.version,
-        comments: "Workflow has no approval stages",
-      },
+    await updateRequest(tx, request.id, { workflowId: workflow.id, status: REQUEST_STATUS.APPROVED });
+    await recordHistory(tx, {
+      hardwareRequestId: request.id,
+      actorUserId: actor.id,
+      action: "Auto-approved",
+      workflowVersion: workflow.version,
+      comments: "Workflow has no approval stages",
     });
     return;
   }
 
-  await tx.hardwareRequest.update({ where: { id: request.id }, data: { workflowId: workflow.id } });
+  await updateRequest(tx, request.id, { workflowId: workflow.id });
   await createTasksForStageGroup(
     tx,
-    request,
+    { id: request.id, requestNumber: request.requestNumber, requester: request.requester },
     workflow.stages.filter((s) => s.stageOrder === first),
     cycle
   );
@@ -162,73 +224,76 @@ export async function startApproval(tx: Tx, requestId: number, actor: AuthUser) 
 
 /** Close any open tasks for a request (used on reject / return / cancel). */
 export async function skipOpenTasks(tx: Tx, requestId: number) {
-  await tx.approvalTask.updateMany({
-    where: { hardwareRequestId: requestId, status: APPROVAL_STATUS.PENDING },
-    data: { status: APPROVAL_STATUS.SKIPPED, actedAt: new Date() },
-  });
+  await execute(
+    tx,
+    `UPDATE dbo.approval_tasks SET status = @skipped, acted_at = SYSUTCDATETIME()
+     WHERE hardware_request_id = @requestId AND status = @pending`,
+    { requestId, skipped: APPROVAL_STATUS.SKIPPED, pending: APPROVAL_STATUS.PENDING }
+  );
 }
 
 export async function listMyTasks(user: AuthUser, p: Pagination & { status?: string }) {
-  const where = {
-    approverUserId: user.id,
-    ...(p.status ? { status: p.status } : {}),
-    ...(p.search
-      ? {
-          request: {
-            OR: [
-              { requestNumber: { contains: p.search } },
-              { requester: { fullName: { contains: p.search } } },
-            ],
-          },
-        }
-      : {}),
-  };
+  const where = new Where().add("t.approver_user_id = @userId", { userId: user.id });
+  if (p.status) where.add("t.status = @status", { status: p.status });
+  if (p.search) where.add("(r.request_number LIKE @search OR u.full_name LIKE @search)", { search: likeContains(p.search) });
+  const from = `FROM dbo.approval_tasks t
+    JOIN dbo.approval_workflow_stages s ON s.id = t.stage_id
+    JOIN dbo.hardware_requests r ON r.id = t.hardware_request_id
+    JOIN dbo.users u ON u.id = r.requester_user_id
+    ${where}`;
+  const pool = await getPool();
   const [items, total] = await Promise.all([
-    prisma.approvalTask.findMany({
-      where,
-      orderBy: [{ status: "desc" }, { createdAt: "desc" }],
-      ...skipTake(p),
-      include: {
-        stage: { select: { name: true } },
-        request: {
-          select: {
-            id: true,
-            requestNumber: true,
-            requestType: true,
-            priority: true,
-            status: true,
-            submittedAt: true,
-            requester: { select: { fullName: true, department: true } },
-            _count: { select: { items: true } },
-          },
-        },
-      },
-    }),
-    prisma.approvalTask.count({ where }),
+    query(
+      pool,
+      `SELECT ${taskCols("t")}, s.name AS [stage.name],
+              r.id AS [request.id], r.request_number AS [request.requestNumber], r.request_type AS [request.requestType],
+              r.priority AS [request.priority], r.status AS [request.status], r.submitted_at AS [request.submittedAt],
+              u.full_name AS [request.requester.fullName], u.department AS [request.requester.department],
+              (SELECT COUNT(*) FROM dbo.hardware_request_items i WHERE i.hardware_request_id = r.id) AS [request._count.items]
+       ${from}
+       ORDER BY t.status DESC, t.created_at DESC, t.id DESC
+       OFFSET @skip ROWS FETCH NEXT @take ROWS ONLY`,
+      { ...where.params, ...skipTake(p) }
+    ),
+    queryOne<{ total: number }>(pool, `SELECT COUNT(*) AS total ${from}`, where.params),
   ]);
-  return { items, total };
+  return { items, total: total?.total ?? 0 };
 }
 
 export async function getTask(user: AuthUser, taskId: number) {
-  const task = await prisma.approvalTask.findUnique({
-    where: { id: taskId },
-    include: {
-      stage: { select: { name: true, stageOrder: true, workflow: { select: { name: true, version: true } } } },
-      request: {
-        include: {
-          requester: { select: { id: true, fullName: true, employeeCode: true, department: true, designation: true } },
-          items: { include: { category: { select: { name: true } } } },
-          history: {
-            orderBy: { createdAt: "asc" },
-            include: { actor: { select: { fullName: true } } },
-          },
-        },
-      },
-    },
-  });
+  const pool = await getPool();
+  const task = await queryOne(
+    pool,
+    `SELECT ${taskCols("t")},
+            s.name AS [stage.name], s.stage_order AS [stage.stageOrder],
+            w.name AS [stage.workflow.name], w.version AS [stage.workflow.version]
+     FROM dbo.approval_tasks t
+     JOIN dbo.approval_workflow_stages s ON s.id = t.stage_id
+     JOIN dbo.approval_workflows w ON w.id = s.workflow_id
+     WHERE t.id = @taskId`,
+    { taskId }
+  );
   if (!task) throw notFound("Approval task");
   if (task.approverUserId !== user.id) throw forbidden("This approval task is not assigned to you");
-  return task;
+
+  const [[request], items, history] = await queryMany(
+    pool,
+    `SELECT ${requestCols("r")},
+            u.id AS [requester.id], u.full_name AS [requester.fullName], u.employee_code AS [requester.employeeCode],
+            u.department AS [requester.department], u.designation AS [requester.designation]
+     FROM dbo.hardware_requests r JOIN dbo.users u ON u.id = r.requester_user_id
+     WHERE r.id = @requestId;
+
+     SELECT ${itemCols("i")}, c.name AS [category.name]
+     FROM dbo.hardware_request_items i JOIN dbo.hardware_categories c ON c.id = i.category_id
+     WHERE i.hardware_request_id = @requestId ORDER BY i.id;
+
+     SELECT ${historyCols("h")}, u.full_name AS [actor.fullName]
+     FROM dbo.approval_history h JOIN dbo.users u ON u.id = h.actor_user_id
+     WHERE h.hardware_request_id = @requestId ORDER BY h.created_at, h.id;`,
+    { requestId: task.hardwareRequestId }
+  );
+  return { ...task, request: { ...request, items, history } };
 }
 
 /**
@@ -248,19 +313,27 @@ export async function actOnTask(
     ]);
   }
 
-  return prisma.$transaction(async (tx) => {
-    const task = await tx.approvalTask.findUnique({
-      where: { id: taskId },
-      include: {
-        stage: { include: { workflow: { include: { stages: true } } } },
-        request: {
-          include: { requester: { select: { id: true, managerId: true, fullName: true } } },
-        },
-      },
-    });
+  return withTransaction(async (tx) => {
+    const task = await queryOne(
+      tx,
+      `SELECT t.id, t.stage_id AS stageId, t.approver_user_id AS approverUserId, t.cycle, t.status,
+              s.name AS [stage.name], s.stage_order AS [stage.stageOrder], s.workflow_id AS [stage.workflowId],
+              w.version AS [stage.workflowVersion],
+              r.id AS [request.id], r.request_number AS [request.requestNumber], r.status AS [request.status],
+              r.requester_user_id AS [request.requesterUserId],
+              u.id AS [request.requester.id], u.manager_id AS [request.requester.managerId],
+              u.full_name AS [request.requester.fullName]
+       FROM dbo.approval_tasks t
+       JOIN dbo.approval_workflow_stages s ON s.id = t.stage_id
+       JOIN dbo.approval_workflows w ON w.id = s.workflow_id
+       JOIN dbo.hardware_requests r ON r.id = t.hardware_request_id
+       JOIN dbo.users u ON u.id = r.requester_user_id
+       WHERE t.id = @taskId`,
+      { taskId }
+    );
     if (!task) throw notFound("Approval task");
     if (task.approverUserId !== user.id) throw forbidden("This approval task is not assigned to you");
-    if (task.status !== APPROVAL_STATUS.PENDING) throw conflict(`This task has already been ${task.status.toLowerCase()}`);
+    if (task.status !== APPROVAL_STATUS.PENDING) throw conflict(`This task has already been ${String(task.status).toLowerCase()}`);
     if (task.request.status !== REQUEST_STATUS.PENDING_APPROVAL) {
       throw conflict(`The request is no longer pending approval (current status: ${task.request.status})`);
     }
@@ -268,25 +341,30 @@ export async function actOnTask(
     const newTaskStatus =
       action === "approve" ? APPROVAL_STATUS.APPROVED : action === "reject" ? APPROVAL_STATUS.REJECTED : APPROVAL_STATUS.RETURNED;
 
-    const updated = await tx.approvalTask.updateMany({
-      where: { id: task.id, status: APPROVAL_STATUS.PENDING },
-      data: { status: newTaskStatus, actedAt: new Date(), comments: comments?.trim() || null },
-    });
-    if (updated.count !== 1) throw conflict("This task was already actioned");
+    const updated = await execute(
+      tx,
+      `UPDATE dbo.approval_tasks SET status = @newStatus, acted_at = SYSUTCDATETIME(), comments = @comments
+       WHERE id = @id AND status = @pending`,
+      { id: task.id, newStatus: newTaskStatus, comments: comments?.trim() || null, pending: APPROVAL_STATUS.PENDING }
+    );
+    if (updated !== 1) throw conflict("This task was already actioned");
 
-    const request = task.request;
-    const workflow = task.stage.workflow;
+    const request = task.request as {
+      id: number;
+      requestNumber: string;
+      status: string;
+      requesterUserId: number;
+      requester: { id: number; managerId: number | null; fullName: string };
+    };
 
-    await tx.approvalHistory.create({
-      data: {
-        hardwareRequestId: request.id,
-        taskId: task.id,
-        stageName: task.stage.name,
-        workflowVersion: workflow.version,
-        actorUserId: user.id,
-        action: newTaskStatus,
-        comments: comments?.trim() || null,
-      },
+    await recordHistory(tx, {
+      hardwareRequestId: request.id,
+      taskId: task.id,
+      stageName: task.stage.name,
+      workflowVersion: task.stage.workflowVersion,
+      actorUserId: user.id,
+      action: newTaskStatus,
+      comments: comments?.trim() || null,
     });
 
     let requestStatus: string = request.status;
@@ -297,7 +375,7 @@ export async function actOnTask(
         action === "reject" ? REQUEST_STATUS.REJECTED : REQUEST_STATUS.RETURNED
       );
       await skipOpenTasks(tx, request.id);
-      await tx.hardwareRequest.update({ where: { id: request.id }, data: { status: requestStatus } });
+      await updateRequest(tx, request.id, { status: requestStatus });
       await notify(tx, {
         recipientUserId: request.requesterUserId,
         eventType: action === "reject" ? NOTIFICATION_EVENT.REQUEST_REJECTED : NOTIFICATION_EVENT.REQUEST_RETURNED,
@@ -307,34 +385,43 @@ export async function actOnTask(
       });
     } else {
       // A ROLE stage is satisfied by any one holder: close the sibling tasks.
-      await tx.approvalTask.updateMany({
-        where: {
-          hardwareRequestId: request.id,
+      await execute(
+        tx,
+        `UPDATE dbo.approval_tasks SET status = @skipped, acted_at = SYSUTCDATETIME()
+         WHERE hardware_request_id = @requestId AND stage_id = @stageId AND cycle = @cycle AND status = @pending`,
+        {
+          requestId: request.id,
           stageId: task.stageId,
           cycle: task.cycle,
-          status: APPROVAL_STATUS.PENDING,
-        },
-        data: { status: APPROVAL_STATUS.SKIPPED, actedAt: new Date() },
-      });
+          skipped: APPROVAL_STATUS.SKIPPED,
+          pending: APPROVAL_STATUS.PENDING,
+        }
+      );
 
-      const groupStageIds = workflow.stages.filter((s) => s.stageOrder === task.stage.stageOrder).map((s) => s.id);
-      const cycleTasks = await tx.approvalTask.findMany({
-        where: { hardwareRequestId: request.id, cycle: task.cycle },
-        select: { stageId: true, status: true },
-      });
+      const stages = await query<Stage>(
+        tx,
+        `SELECT ${STAGE_SELECT} FROM dbo.approval_workflow_stages s WHERE s.workflow_id = @workflowId ORDER BY s.stage_order, s.id`,
+        { workflowId: task.stage.workflowId }
+      );
+      const groupStageIds = stages.filter((s) => s.stageOrder === task.stage.stageOrder).map((s) => s.id);
+      const cycleTasks = await query<{ stageId: number; status: string }>(
+        tx,
+        `SELECT stage_id AS stageId, status FROM dbo.approval_tasks WHERE hardware_request_id = @requestId AND cycle = @cycle`,
+        { requestId: request.id, cycle: task.cycle }
+      );
 
       if (isStageGroupComplete(groupStageIds, cycleTasks)) {
-        const next = nextStageOrder(workflow.stages, task.stage.stageOrder);
+        const next = nextStageOrder(stages, task.stage.stageOrder);
         if (next !== null) {
           await createTasksForStageGroup(
             tx,
             request,
-            workflow.stages.filter((s) => s.stageOrder === next),
+            stages.filter((s) => s.stageOrder === next),
             task.cycle
           );
         } else {
           requestStatus = setRequestStatus(request.status, REQUEST_STATUS.APPROVED);
-          await tx.hardwareRequest.update({ where: { id: request.id }, data: { status: requestStatus } });
+          await updateRequest(tx, request.id, { status: requestStatus });
           await notify(tx, {
             recipientUserId: request.requesterUserId,
             eventType: NOTIFICATION_EVENT.REQUEST_APPROVED,
@@ -356,6 +443,6 @@ export async function actOnTask(
       correlationId,
     });
 
-    return { taskId: task.id, taskStatus: newTaskStatus, requestStatus };
+    return { taskId: task.id as number, taskStatus: newTaskStatus, requestStatus };
   });
 }

@@ -1,5 +1,5 @@
 import type { IncomingMessage } from "http";
-import { prisma } from "./prisma";
+import { getPool, query, queryOne } from "./db";
 import { getSessionCookie, readSessionToken } from "./session";
 import { isRoleKey, roleName, type RoleKey } from "../config/roles.config";
 
@@ -39,26 +39,36 @@ export interface AuthUser {
 
 /** Load a user and their effective permissions from the database. Returns null for inactive users. */
 export async function loadAuthUser(userId: number): Promise<AuthUser | null> {
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    select: {
-      id: true,
-      employeeCode: true,
-      fullName: true,
-      email: true,
-      department: true,
-      designation: true,
-      managerId: true,
-      isActive: true,
-      role: true,
-      permissions: true,
-    },
-  });
+  const pool = await getPool();
+  const user = await queryOne<{
+    id: number;
+    employeeCode: string;
+    fullName: string;
+    email: string | null;
+    department: string | null;
+    designation: string | null;
+    managerId: number | null;
+    isActive: boolean;
+    role: string | null;
+    permissions: string;
+  }>(
+    pool,
+    `SELECT id, employee_code AS employeeCode, full_name AS fullName, email, department, designation,
+            manager_id AS managerId, is_active AS isActive, role, permissions
+     FROM dbo.users WHERE id = @userId`,
+    { userId }
+  );
   if (!user || !user.isActive) return null;
 
   const ids = parsePermissionIds(user.permissions);
   const permissions = ids.length
-    ? (await prisma.permission.findMany({ where: { id: { in: ids } }, select: { permissionKey: true } }))
+    ? (
+        await query<{ permissionKey: string }>(
+          pool,
+          `SELECT permission_key AS permissionKey FROM dbo.permissions WHERE id IN (@ids)`,
+          { ids }
+        )
+      )
         .map((p) => p.permissionKey)
         .sort()
     : [];
@@ -103,10 +113,11 @@ export function authMode(): AuthMode {
 export async function verifyCredentials(input: { employeeCode: string; password?: string }): Promise<number | null> {
   if (authMode() === "dev") {
     if (process.env.NODE_ENV === "production") return null;
-    const user = await prisma.user.findFirst({
-      where: { employeeCode: input.employeeCode, isActive: true },
-      select: { id: true },
-    });
+    const user = await queryOne<{ id: number }>(
+      await getPool(),
+      `SELECT TOP 1 id FROM dbo.users WHERE employee_code = @employeeCode AND is_active = 1 ORDER BY id`,
+      { employeeCode: input.employeeCode }
+    );
     return user?.id ?? null;
   }
   return null;
