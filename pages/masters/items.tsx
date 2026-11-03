@@ -116,9 +116,9 @@ export default function ItemMasterPage({ user, forbidden }: ProtectedPageProps) 
           <div className="flex flex-wrap gap-2">
             {canBulk && (
               <>
-                <Button variant="ghost" onClick={() => downloadItemSample(categoryList)}>
+                {/* <Button variant="ghost" onClick={() => downloadItemSample(categoryList)}>
                   <Download size={18} aria-hidden="true" /> Sample sheet
-                </Button>
+                </Button> */}
                 <Button variant="secondary" onClick={() => setBulkOpen(true)}>
                   <Upload size={18} aria-hidden="true" /> Bulk upload
                 </Button>
