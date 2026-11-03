@@ -1,0 +1,25 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    @apply bg-background text-neutral-900 antialiased;
+  }
+  body {
+    @apply font-sans text-body bg-background;
+  }
+  h1, h2, h3, h4 {
+    @apply font-headline text-neutral-900;
+  }
+  :focus-visible {
+    outline: 2px solid #D946EF;
+    outline-offset: 2px;
+  }
+}
+
+@layer components {
+  .overline {
+    @apply text-overline uppercase text-neutral-500;
+  }
+}
