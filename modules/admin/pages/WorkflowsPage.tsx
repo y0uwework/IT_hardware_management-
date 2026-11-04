@@ -7,7 +7,8 @@ import { Input, Select } from "@/components/common/FormField";
 import { Modal } from "@/components/common/Modal";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { LoadingState } from "@/components/common/LoadingSpinner";
-import { Alert, EmptyState, ErrorState } from "@/components/common/States";
+import { EmptyState, ErrorState } from "@/components/common/States";
+import { toastSetter } from "@/components/common/Toast";
 import type { ProtectedPageProps } from "@/middlewares/page-auth";
 import { api, ApiClientError, formatDate, formatMoney, useApi } from "@/shared/client";
 import { appConfig } from "@/shared/config/app.config";
@@ -85,9 +86,9 @@ export default function WorkflowsPage({ user, forbidden }: ProtectedPageProps) {
   const [draft, setDraft] = useState<Draft | null>(null);
   const [isNewKey, setIsNewKey] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [formError, setFormError] = useState<string | null>(null);
+  const setFormError = toastSetter("error");
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [msg, setMsg] = useState<string | null>(null);
+  const setMsg = toastSetter("success");
 
   const keys = Array.from(new Set((data ?? []).map((w) => w.workflowKey)));
 
@@ -147,11 +148,6 @@ export default function WorkflowsPage({ user, forbidden }: ProtectedPageProps) {
           </Button>
         }
       />
-      {msg && (
-        <div className="mb-6">
-          <Alert tone="success">{msg}</Alert>
-        </div>
-      )}
       {loading && !data && <LoadingState />}
       {error && <ErrorState message={error} onRetry={reload} />}
       {data && data.length === 0 && (
@@ -247,7 +243,6 @@ export default function WorkflowsPage({ user, forbidden }: ProtectedPageProps) {
       >
         {draft && (
           <div className="flex flex-col gap-5">
-            {formError && <Alert>{formError}</Alert>}
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               <Input
                 label="Key"

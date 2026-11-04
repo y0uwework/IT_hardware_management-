@@ -8,6 +8,7 @@ import { DataTable, Pagination, SearchInput, type Column } from "@/components/co
 import { Input, Select } from "@/components/common/FormField";
 import { Modal } from "@/components/common/Modal";
 import { Alert } from "@/components/common/States";
+import { toastSetter } from "@/components/common/Toast";
 import type { ProtectedPageProps } from "@/middlewares/page-auth";
 import { api, ApiClientError, qs, useApi } from "@/shared/client";
 import { hasPermission } from "@/shared/permissions";
@@ -42,7 +43,7 @@ export default function InventoryPage({ user, forbidden }: ProtectedPageProps) {
   const [open, setOpen] = useState(false);
   const [mv, setMv] = useState({ categoryId: "", warehouseId: "", movementType: "Receipt", quantity: "", reason: "" });
   const [saving, setSaving] = useState(false);
-  const [mvError, setMvError] = useState<string | null>(null);
+  const setMvError = toastSetter("error");
 
   async function saveMovement() {
     setSaving(true);
@@ -124,7 +125,6 @@ export default function InventoryPage({ user, forbidden }: ProtectedPageProps) {
       >
         <div className="flex flex-col gap-4">
           <Alert tone="info">For quantity-tracked items (cables, mice, etc.). Serialized devices are added through asset registration.</Alert>
-          {mvError && <Alert>{mvError}</Alert>}
           <Select
             label="Category"
             required

@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Modal } from "@/components/common/Modal";
 import { Button } from "@/components/common/Button";
 import { Input, Select, Textarea } from "@/components/common/FormField";
-import { Alert } from "@/components/common/States";
+import { toastSetter } from "@/components/common/Toast";
 import { api, ApiClientError, qs } from "@/shared/client";
 import { appConfig } from "@/shared/config/app.config";
 
@@ -39,7 +39,7 @@ export function AssignModal({
   const [accessories, setAccessories] = useState("");
   const [notes, setNotes] = useState("");
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const setError = toastSetter("error");
 
   useEffect(() => {
     if (!open || fixedUser) return;
@@ -91,7 +91,6 @@ export function AssignModal({
       }
     >
       <div className="flex flex-col gap-4">
-        {error && <Alert>{error}</Alert>}
         {fixedUser ? (
           <div>
             <p className="text-[13px] font-semibold">Employee</p>

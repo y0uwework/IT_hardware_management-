@@ -3,7 +3,8 @@ import { Laptop } from "lucide-react";
 import { MainLayout, PageHeader } from "@/components/layout/MainLayout";
 import { Button } from "@/components/common/Button";
 import { LoadingState } from "@/components/common/LoadingSpinner";
-import { Alert, EmptyState, ErrorState } from "@/components/common/States";
+import { EmptyState, ErrorState } from "@/components/common/States";
+import { toastSetter } from "@/components/common/Toast";
 import type { ProtectedPageProps } from "@/middlewares/page-auth";
 import { api, ApiClientError, formatDate, useApi } from "@/shared/client";
 
@@ -28,7 +29,7 @@ interface Row {
 export default function MyAssetsPage({ user, forbidden }: ProtectedPageProps) {
   const { data, error, loading, reload } = useApi<Row[]>(forbidden ? null : "/assets/mine");
   const [busy, setBusy] = useState<number | null>(null);
-  const [msg, setMsg] = useState<{ tone: "success" | "error"; text: string } | null>(null);
+  const setMsg = toastSetter("error");
 
   async function acknowledge(id: number) {
     setBusy(id);
@@ -47,11 +48,6 @@ export default function MyAssetsPage({ user, forbidden }: ProtectedPageProps) {
   return (
     <MainLayout user={user} title="My assets" forbidden={forbidden}>
       <PageHeader title="My assets" subtitle="Hardware currently issued to you." />
-      {msg && (
-        <div className="mb-6">
-          <Alert tone={msg.tone}>{msg.text}</Alert>
-        </div>
-      )}
       {loading && !data && <LoadingState />}
       {error && <ErrorState message={error} onRetry={reload} />}
       {data && data.length === 0 && (

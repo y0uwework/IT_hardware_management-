@@ -126,7 +126,6 @@ export default function TicketPage({ user, forbidden }: ProtectedPageProps) {
       {error && <ErrorState message={error} onRetry={reload} />}
       {t && (
         <div className="flex flex-col gap-6">
-          {m.flash && !dialog && <Alert tone={m.flash.tone}>{m.flash.text}</Alert>}
           {isReporter && t.status === MAINTENANCE_STATUS.RESOLVED && (
             <Alert tone="info">IT has marked this resolved. Confirm it&apos;s fixed, or reopen it if the problem is still there.</Alert>
           )}
@@ -230,7 +229,6 @@ export default function TicketPage({ user, forbidden }: ProtectedPageProps) {
         }
       >
         <div className="flex flex-col gap-4">
-          {m.flash?.tone === "error" && <Alert>{m.flash.text}</Alert>}
           {dialog === "assign" && (
             <>
               <Select label="Technician" required value={String(f.assigneeUserId ?? "")} placeholder={techs.loading ? "Loading…" : "Choose a technician"} options={(techs.data ?? []).map((u) => ({ value: u.id, label: `${u.fullName} (${u.openTickets} open)` }))} onChange={set("assigneeUserId")} error={err.assigneeUserId} />

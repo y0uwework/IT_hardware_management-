@@ -6,7 +6,7 @@ import { Button } from "@/components/common/Button";
 import { Checkbox } from "@/components/common/FormField";
 import { Modal } from "@/components/common/Modal";
 import { DataTable, Pagination, SearchInput, type Column } from "@/components/common/DataTable";
-import { Alert } from "@/components/common/States";
+import { toastSetter } from "@/components/common/Toast";
 import type { ProtectedPageProps } from "@/middlewares/page-auth";
 import { api, ApiClientError, qs, useApi } from "@/shared/client";
 
@@ -44,7 +44,7 @@ export default function UsersAccessPage({ user, forbidden }: ProtectedPageProps)
   const roles = useApi<RoleDef[]>(forbidden ? null : "/admin/roles");
   const perms = useApi<Permission[]>(forbidden ? null : "/admin/permissions");
   const { data, meta, error, loading, reload } = useApi<Row[]>(router.isReady && !forbidden ? `/users${qs({ search, page })}` : null);
-  const [msg, setMsg] = useState<{ tone: "success" | "error"; text: string } | null>(null);
+  const setMsg = toastSetter("error");
 
   const [editing, setEditing] = useState<Row | null>(null);
   const [checked, setChecked] = useState<Set<number>>(new Set());
@@ -153,11 +153,6 @@ export default function UsersAccessPage({ user, forbidden }: ProtectedPageProps)
         title="Users & access"
         subtitle="Choosing a role applies its default permissions. Use Edit to fine-tune an individual user's permissions."
       />
-      {msg && (
-        <div className="mb-6">
-          <Alert tone={msg.tone}>{msg.text}</Alert>
-        </div>
-      )}
       <Card padded={false}>
         <div className="flex justify-end border-b border-neutral-200 p-4 sm:p-6">
           <SearchInput value={search} onChange={(v) => setQuery({ search: v || undefined })} placeholder="Name, code or email" />

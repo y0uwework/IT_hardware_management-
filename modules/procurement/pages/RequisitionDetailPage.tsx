@@ -160,7 +160,6 @@ export default function RequisitionDetailPage({ user, forbidden }: ProtectedPage
       {error && <ErrorState message={error} onRetry={reload} />}
       {pr && (
         <div className="flex flex-col gap-6">
-          {m.flash && !quoteOpen && !selecting && !poFrom && !cancelOpen && <Alert tone={m.flash.tone}>{m.flash.text}</Alert>}
           {livePo && (
             <Alert tone="info">
               Ordered on <Link className="font-semibold underline" href={`/procurement/purchase-orders/${livePo.id}`}>{livePo.poNumber}</Link> with {livePo.vendorName} ({livePo.status}).
@@ -303,7 +302,6 @@ export default function RequisitionDetailPage({ user, forbidden }: ProtectedPage
         }
       >
         <div className="flex flex-col gap-4">
-          {m.flash?.tone === "error" && <Alert>{m.flash.text}</Alert>}
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <Select label="Vendor" required value={quote.vendorId} placeholder="Choose a vendor" options={(vendors.data ?? []).map((v) => ({ value: v.id, label: `${v.name} (${v.code})` }))} onChange={(e) => setQuote({ ...quote, vendorId: e.target.value })} error={m.fieldErrors.vendorId} />
             <Input label="Vendor's quote ref." value={quote.vendorReference} onChange={(e) => setQuote({ ...quote, vendorReference: e.target.value })} />
@@ -348,7 +346,6 @@ export default function RequisitionDetailPage({ user, forbidden }: ProtectedPage
         }
       >
         <div className="flex flex-col gap-3">
-          {m.flash?.tone === "error" && <Alert>{m.flash.text}</Alert>}
           <Textarea label="Reason for selection" required rows={3} value={reason} onChange={(e) => setReason(e.target.value)} error={m.fieldErrors.reason} helper="e.g. Lowest total price and fastest delivery." />
         </div>
       </Modal>
@@ -365,7 +362,6 @@ export default function RequisitionDetailPage({ user, forbidden }: ProtectedPage
         }
       >
         <div className="flex flex-col gap-4">
-          {m.flash?.tone === "error" && <Alert>{m.flash.text}</Alert>}
           <p className="text-body-sm text-neutral-600">A draft PO is created from the selected quotation. Submit it for approval from the PO page.</p>
           <Select label="Deliver to warehouse" required value={po.deliveryWarehouseId} placeholder="Choose a warehouse" options={(warehouses.data ?? []).map((w) => ({ value: w.id, label: w.name }))} onChange={(e) => setPo({ ...po, deliveryWarehouseId: e.target.value })} error={m.fieldErrors.deliveryWarehouseId} />
           <Input label="Expected delivery" type="date" value={po.expectedDate} onChange={(e) => setPo({ ...po, expectedDate: e.target.value })} helper="Defaults to quote date + quoted delivery days." />
@@ -385,7 +381,6 @@ export default function RequisitionDetailPage({ user, forbidden }: ProtectedPage
         }
       >
         <div className="flex flex-col gap-3">
-          {m.flash?.tone === "error" && <Alert>{m.flash.text}</Alert>}
           <p className="text-body-sm text-neutral-600">Its request lines go back to the &quot;waiting to be procured&quot; list.</p>
           <Textarea label="Reason" required rows={2} value={reason} onChange={(e) => setReason(e.target.value)} error={m.fieldErrors.reason} />
         </div>

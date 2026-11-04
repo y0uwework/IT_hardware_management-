@@ -7,7 +7,8 @@ import { Button } from "@/components/common/Button";
 import { Input, Select } from "@/components/common/FormField";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { LoadingState } from "@/components/common/LoadingSpinner";
-import { Alert, EmptyState } from "@/components/common/States";
+import { EmptyState, ErrorState } from "@/components/common/States";
+import { toastSetter } from "@/components/common/Toast";
 import type { ProtectedPageProps } from "@/middlewares/page-auth";
 import { api, ApiClientError, formatDate, formatMoney, qs, useApi } from "@/shared/client";
 import { downloadCsv } from "@/shared/download";
@@ -67,7 +68,7 @@ export default function ReportsPage({ user, forbidden }: ProtectedPageProps) {
   const [department, setDepartment] = useState("");
   const [result, setResult] = useState<ReportResult | null>(null);
   const [running, setRunning] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
+  const setErr = toastSetter("error");
   const [sort, setSort] = useState<{ key: string; dir: 1 | -1 } | null>(null);
 
   const meta = reports.data?.find((r) => r.key === key) ?? null;
@@ -140,7 +141,7 @@ export default function ReportsPage({ user, forbidden }: ProtectedPageProps) {
     <MainLayout user={user} title="Reports" forbidden={forbidden}>
       <PageHeader title="Reports" subtitle="Operational and financial reports across requests, procurement, assets and maintenance. Export any report to CSV." />
       {reports.loading && !reports.data && <LoadingState />}
-      {reports.error && <Alert>{reports.error}</Alert>}
+      {reports.error && <ErrorState message={reports.error} onRetry={reports.reload} />}
       {reports.data && reports.data.length === 0 && <EmptyState title="No reports available" message="Your access doesn't include any reports." />}
       {reports.data && reports.data.length > 0 && (
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-[260px_minmax(0,1fr)]">
@@ -213,7 +214,6 @@ export default function ReportsPage({ user, forbidden }: ProtectedPageProps) {
               </Card>
             )}
 
-            {err && <Alert>{err}</Alert>}
             {running && !result && <LoadingState />}
             {result && (
               <Card

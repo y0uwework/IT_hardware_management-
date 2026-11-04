@@ -7,7 +7,7 @@ import { DataTable, FilterChips, Pagination, SearchInput, type Column } from "@/
 import { Select } from "@/components/common/FormField";
 import { ConfirmDialog } from "@/components/common/Modal";
 import { StatusBadge } from "@/components/common/StatusBadge";
-import { Alert } from "@/components/common/States";
+import { toastSetter } from "@/components/common/Toast";
 import { ItemFormModal } from "@/modules/items/pages/components/ItemFormModal";
 import { BulkUploadModal, downloadItemSample } from "@/modules/items/pages/components/BulkUploadModal";
 import type { CategoryOption, ItemRow } from "@/modules/items/items.types";
@@ -38,7 +38,7 @@ export default function ItemMasterPage({ user, forbidden }: ProtectedPageProps) 
   const [deleting, setDeleting] = useState<ItemRow | null>(null);
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [bulkOpen, setBulkOpen] = useState(false);
-  const [msg, setMsg] = useState<{ tone: "success" | "error"; text: string } | null>(null);
+  const setMsg = toastSetter("error");
 
   const filter = (fn: () => void) => {
     fn();
@@ -130,11 +130,6 @@ export default function ItemMasterPage({ user, forbidden }: ProtectedPageProps) 
           </div>
         }
       />
-      {msg && (
-        <div className="mb-6">
-          <Alert tone={msg.tone}>{msg.text}</Alert>
-        </div>
-      )}
       <Card padded={false}>
         <div className="flex flex-col gap-4 border-b border-neutral-200 p-4 sm:p-6 lg:flex-row lg:items-center lg:justify-between">
           <FilterChips<StatusFilter>

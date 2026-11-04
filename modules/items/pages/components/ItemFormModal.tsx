@@ -3,6 +3,7 @@ import { Button } from "@/components/common/Button";
 import { Checkbox, Input, Select, Textarea } from "@/components/common/FormField";
 import { Modal } from "@/components/common/Modal";
 import { Alert } from "@/components/common/States";
+import { toastSetter } from "@/components/common/Toast";
 import { api, ApiClientError, qs } from "@/shared/client";
 import { appConfig } from "@/shared/config/app.config";
 import type { CategoryOption, ItemRow } from "../../items.types";
@@ -80,7 +81,7 @@ export function ItemFormModal({
 }) {
   const [values, setValues] = useState<FormValues>(blank);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const setError = toastSetter("error");
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [dup, setDup] = useState<DuplicateCheck | null>(null);
 
@@ -160,7 +161,6 @@ export function ItemFormModal({
       }
     >
       <div className="flex flex-col gap-4">
-        {error && <Alert>{error}</Alert>}
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           <Input
             label="Item code"

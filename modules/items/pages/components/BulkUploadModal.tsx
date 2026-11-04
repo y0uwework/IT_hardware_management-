@@ -3,6 +3,7 @@ import { Download, Upload } from "lucide-react";
 import { Button } from "@/components/common/Button";
 import { Modal } from "@/components/common/Modal";
 import { Alert } from "@/components/common/States";
+import { toastSetter } from "@/components/common/Toast";
 import { api, ApiClientError } from "@/shared/client";
 import { downloadText } from "@/shared/download";
 import { appConfig } from "@/shared/config/app.config";
@@ -37,7 +38,7 @@ export function BulkUploadModal({
   const fileInput = useRef<HTMLInputElement>(null);
   const [fileName, setFileName] = useState<string | null>(null);
   const [rows, setRows] = useState<ItemSheetRow[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const setError = toastSetter("error");
   const [uploading, setUploading] = useState(false);
   const [result, setResult] = useState<BulkResult | null>(null);
 
@@ -179,7 +180,6 @@ export function BulkUploadModal({
           </>
         )}
 
-        {error && <Alert>{error}</Alert>}
 
         {result && (
           <>

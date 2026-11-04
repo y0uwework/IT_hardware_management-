@@ -107,7 +107,6 @@ export default function InvoicePage({ user, forbidden }: ProtectedPageProps) {
       {error && <ErrorState message={error} onRetry={reload} />}
       {inv && (
         <div className="flex flex-col gap-6">
-          {m.flash && !dialog && <Alert tone={m.flash.tone}>{m.flash.text}</Alert>}
           {inv.status === INVOICE_STATUS.VERIFIED && inv.verifiedByUserId === user.id && hasPermission(user, "finance.invoice.approve") && (
             <Alert tone="info">You verified this invoice, so a different approver must approve it.</Alert>
           )}
@@ -230,7 +229,6 @@ export default function InvoicePage({ user, forbidden }: ProtectedPageProps) {
         }
       >
         <div className="flex flex-col gap-4">
-          {m.flash?.tone === "error" && <Alert>{m.flash.text}</Alert>}
           {dialog === "verify" && inv && (
             <>
               <p className="text-body-sm">

@@ -7,7 +7,6 @@ import { DataTable, FilterChips, Pagination, SearchInput, type Column } from "@/
 import { Checkbox, Input, Textarea } from "@/components/common/FormField";
 import { Modal } from "@/components/common/Modal";
 import { StatusBadge } from "@/components/common/StatusBadge";
-import { Alert } from "@/components/common/States";
 import { useMutation } from "@/components/common/Workflow";
 import type { ProtectedPageProps } from "@/middlewares/page-auth";
 import { qs, useApi } from "@/shared/client";
@@ -132,7 +131,6 @@ export default function VendorsPage({ user, forbidden }: ProtectedPageProps) {
       >
         {f && (
           <div className="flex flex-col gap-4">
-            {m.flash?.tone === "error" && <Alert>{m.flash.text}</Alert>}
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               <Input label="Vendor code" required className="font-mono" value={f.code} onChange={(e) => set("code", e.target.value.toUpperCase())} error={err.code} />
               <Input label="Name" required value={f.name} onChange={(e) => set("name", e.target.value)} error={err.name} />

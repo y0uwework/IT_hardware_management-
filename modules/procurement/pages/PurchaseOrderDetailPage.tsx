@@ -177,7 +177,6 @@ export default function PurchaseOrderPage({ user, forbidden }: ProtectedPageProp
       {error && <ErrorState message={error} onRetry={reload} />}
       {po && (
         <div className="flex flex-col gap-6">
-          {m.flash && !acting && !recvOpen && <Alert tone={m.flash.tone}>{m.flash.text}</Alert>}
           {po.status === PO_STATUS.PENDING_APPROVAL && po.createdByUserId === user.id && hasPermission(user, "procurement.po.approve") && (
             <Alert tone="info">You created this order, so someone else has to approve it.</Alert>
           )}
@@ -303,7 +302,6 @@ export default function PurchaseOrderPage({ user, forbidden }: ProtectedPageProp
         }
       >
         <div className="flex flex-col gap-3">
-          {m.flash?.tone === "error" && <Alert>{m.flash.text}</Alert>}
           {acting === "approve" && po && <p className="text-body-sm">Approve an order of <span className="font-semibold">{formatMoney(po.totalAmount)}</span> with {po.vendor.name}.</p>}
           {acting === "send" && <p className="text-body-sm">Confirm the PO has been emailed or handed to the vendor.</p>}
           {acting === "close" && <p className="text-body-sm">Closing stops further receipts. Do this when the vendor will not deliver the rest.</p>}
@@ -331,7 +329,6 @@ export default function PurchaseOrderPage({ user, forbidden }: ProtectedPageProp
         }
       >
         <div className="flex flex-col gap-4">
-          {m.flash?.tone === "error" && <Alert>{m.flash.text}</Alert>}
           <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
             <Select label="Warehouse" required value={recv.warehouseId} options={(warehouses.data ?? []).map((w) => ({ value: w.id, label: w.name }))} onChange={(e) => setRecv({ ...recv, warehouseId: e.target.value })} />
             <Input label="Received on" type="date" required value={recv.receivedDate} onChange={(e) => setRecv({ ...recv, receivedDate: e.target.value })} error={m.fieldErrors.receivedDate} />

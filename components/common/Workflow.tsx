@@ -1,6 +1,7 @@
 // Small building blocks shared by the procurement, finance and maintenance screens.
 import { useState } from "react";
 import { api, ApiClientError } from "@/shared/client";
+import { toastSetter } from "./Toast";
 
 /** Label/value grid for detail pages. */
 export function InfoGrid({ items, cols = 3 }: { items: [string, React.ReactNode][]; cols?: 2 | 3 | 4 }) {
@@ -31,12 +32,13 @@ export function Stat({ label, value, tone }: { label: string; value: React.React
 export type Flash = { tone: "success" | "error"; text: string } | null;
 
 /**
- * POST/PUT helper with busy state, a flash message and field errors.
- * `run` resolves to the response data, or null when it failed (the error is in `flash`/`fieldErrors`).
+ * POST/PUT helper with busy state, toast messages and field errors.
+ * `run` resolves to the response data, or null when it failed (the error is shown as a toast;
+ * per-field errors are in `fieldErrors`). `setFlash` shows a toast; `setFlash(null)` is a no-op.
  */
 export function useMutation() {
   const [busy, setBusy] = useState<string | null>(null);
-  const [flash, setFlash] = useState<Flash>(null);
+  const setFlash = toastSetter("error") as (f: Flash) => void;
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   async function run<T = unknown>(key: string, path: string, body: unknown = {}, method = "POST"): Promise<T | null> {
@@ -58,7 +60,7 @@ export function useMutation() {
     }
   }
 
-  return { busy, flash, setFlash, fieldErrors, setFieldErrors, run };
+  return { busy, setFlash, fieldErrors, setFieldErrors, run };
 }
 
 /** Today's date as YYYY-MM-DD (local time), for date inputs. */

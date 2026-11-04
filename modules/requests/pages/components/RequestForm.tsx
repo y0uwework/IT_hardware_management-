@@ -4,7 +4,7 @@ import { Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/common/Button";
 import { Input, Select, Textarea } from "@/components/common/FormField";
 import { Card } from "@/components/common/Card";
-import { Alert } from "@/components/common/States";
+import { toastSetter } from "@/components/common/Toast";
 import { api, ApiClientError, formatMoney, useApi } from "@/shared/client";
 import { appConfig } from "@/shared/config/app.config";
 
@@ -43,7 +43,7 @@ export function RequestForm({ initial, requestId }: { initial: RequestFormValues
   const router = useRouter();
   const [values, setValues] = useState<RequestFormValues>(initial);
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [formError, setFormError] = useState<string | null>(null);
+  const setFormError = toastSetter("error");
   const [saving, setSaving] = useState<"draft" | "submit" | null>(null);
   const itemOptions = useApi<ItemOption[]>("/items/options");
 
@@ -95,7 +95,6 @@ export function RequestForm({ initial, requestId }: { initial: RequestFormValues
 
   return (
     <form onSubmit={(e) => save(true, e)} className="flex flex-col gap-6" noValidate>
-      {formError && <Alert>{formError}</Alert>}
 
       <Card title="Request details">
         <div className="grid grid-cols-1 gap-5 md:grid-cols-2">

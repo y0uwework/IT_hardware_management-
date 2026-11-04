@@ -7,7 +7,7 @@ import { DataTable, FilterChips, type Column } from "@/components/common/DataTab
 import { Checkbox, Input } from "@/components/common/FormField";
 import { Modal } from "@/components/common/Modal";
 import { StatusBadge } from "@/components/common/StatusBadge";
-import { Alert } from "@/components/common/States";
+import { toastSetter } from "@/components/common/Toast";
 import type { ProtectedPageProps } from "@/middlewares/page-auth";
 import { api, ApiClientError, useApi } from "@/shared/client";
 
@@ -36,7 +36,7 @@ export default function MasterDataPage({ user, forbidden }: ProtectedPageProps) 
 
   const [editing, setEditing] = useState<{ kind: Tab; id: number | null; values: Record<string, string | boolean> } | null>(null);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const setError = toastSetter("error");
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   function openNew() {
@@ -160,7 +160,6 @@ export default function MasterDataPage({ user, forbidden }: ProtectedPageProps) 
         }
       >
         <div className="flex flex-col gap-4">
-          {error && <Alert>{error}</Alert>}
           <Input label="Code" required value={String(v.code ?? "")} onChange={(e) => setV("code", e.target.value.toUpperCase())} error={fieldErrors.code} className="font-mono" />
           <Input label="Name" required value={String(v.name ?? "")} onChange={(e) => setV("name", e.target.value)} error={fieldErrors.name} />
           {editing?.kind === "categories" ? (

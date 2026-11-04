@@ -8,7 +8,6 @@ import { DataTable, FilterChips, Pagination, SearchInput, type Column } from "@/
 import { Input, Select, Textarea } from "@/components/common/FormField";
 import { Modal } from "@/components/common/Modal";
 import { StatusBadge } from "@/components/common/StatusBadge";
-import { Alert } from "@/components/common/States";
 import { today, useMutation } from "@/components/common/Workflow";
 import type { ProtectedPageProps } from "@/middlewares/page-auth";
 import { api, formatDate, formatMoney, qs, useApi } from "@/shared/client";
@@ -191,7 +190,6 @@ export default function InvoicesPage({ user, forbidden }: ProtectedPageProps) {
         }
       >
         <div className="flex flex-col gap-4">
-          {m.flash?.tone === "error" && <Alert>{m.flash.text}</Alert>}
           <Select
             label="Purchase order"
             required

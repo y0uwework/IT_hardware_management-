@@ -8,6 +8,7 @@ import { StatusBadge } from "@/components/common/StatusBadge";
 import { ApprovalTimeline } from "@/components/common/ApprovalTimeline";
 import { LoadingState } from "@/components/common/LoadingSpinner";
 import { Alert, ErrorState } from "@/components/common/States";
+import { toastSetter } from "@/components/common/Toast";
 import { ConfirmDialog } from "@/components/common/Modal";
 import { Input, Textarea } from "@/components/common/FormField";
 import { ItReviewPanel } from "@/modules/requests/pages/components/ItReviewPanel";
@@ -40,7 +41,7 @@ export default function RequestDetailPage({ user, forbidden }: ProtectedPageProp
   const { data: r, error, loading, reload } = useApi<RequestDetail>(router.isReady && !forbidden ? `/hardware-requests/${id}` : null);
 
   const [busy, setBusy] = useState<string | null>(null);
-  const [actionError, setActionError] = useState<string | null>(null);
+  const setActionError = toastSetter("error");
   const [confirmCancel, setConfirmCancel] = useState(false);
   const [cancelReason, setCancelReason] = useState("");
   const [assignTarget, setAssignTarget] = useState<{ asset: { id: number; assetTag: string }; itemId: number } | null>(null);
@@ -109,7 +110,6 @@ export default function RequestDetailPage({ user, forbidden }: ProtectedPageProp
 
       {r && (
         <div className="flex flex-col gap-6">
-          {actionError && <Alert>{actionError}</Alert>}
           {returnedComment && isOwner && (
             <Alert tone="warning">
               <strong>Changes requested:</strong> {returnedComment}

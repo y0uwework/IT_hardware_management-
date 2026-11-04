@@ -5,7 +5,6 @@ import { MainLayout, PageHeader } from "@/components/layout/MainLayout";
 import { Card } from "@/components/common/Card";
 import { Button } from "@/components/common/Button";
 import { Input, Select, Textarea } from "@/components/common/FormField";
-import { Alert } from "@/components/common/States";
 import { today, useMutation } from "@/components/common/Workflow";
 import type { ProtectedPageProps } from "@/middlewares/page-auth";
 import { formatMoney, useApi } from "@/shared/client";
@@ -59,7 +58,6 @@ export default function CreatePurchaseOrderPage({ user, forbidden }: ProtectedPa
         breadcrumbs={[{ label: "Purchase orders", href: "/procurement/purchase-orders" }, { label: "New" }]}
       />
       <div className="flex flex-col gap-6">
-        {m.flash?.tone === "error" && <Alert>{m.flash.text}</Alert>}
         <Card title="Order">
           <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
             <Select label="Vendor" required value={h.vendorId} placeholder="Choose a vendor" options={(vendors.data ?? []).map((v) => ({ value: v.id, label: `${v.name} (${v.code})` }))} onChange={(ev) => setH({ ...h, vendorId: ev.target.value })} error={e.vendorId} />

@@ -6,7 +6,6 @@ import { Button } from "@/components/common/Button";
 import { DataTable, type Column } from "@/components/common/DataTable";
 import { Input, Select, Textarea } from "@/components/common/FormField";
 import { Modal } from "@/components/common/Modal";
-import { Alert } from "@/components/common/States";
 import { Stat, sum, useMutation } from "@/components/common/Workflow";
 import type { ProtectedPageProps } from "@/middlewares/page-auth";
 import { formatMoney, useApi } from "@/shared/client";
@@ -135,7 +134,6 @@ export default function BudgetsPage({ user, forbidden }: ProtectedPageProps) {
       >
         {editing && (
           <div className="flex flex-col gap-4">
-            {m.flash?.tone === "error" && <Alert>{m.flash.text}</Alert>}
             <Select label="Department" required value={editing.department} placeholder="Choose a department" options={(departments.data ?? []).map((d) => ({ value: d, label: d }))} onChange={(e) => setEditing({ ...editing, department: e.target.value })} error={m.fieldErrors.department} />
             <Input label="Cost centre" value={editing.costCentre} onChange={(e) => setEditing({ ...editing, costCentre: e.target.value })} helper="Leave blank to budget the whole department." />
             <Input label="Amount" type="number" min={0} step="0.01" required value={editing.amount} onChange={(e) => setEditing({ ...editing, amount: e.target.value })} error={m.fieldErrors.amount} />

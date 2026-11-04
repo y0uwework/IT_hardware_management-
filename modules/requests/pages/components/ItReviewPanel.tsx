@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Button } from "@/components/common/Button";
 import { Input, Textarea } from "@/components/common/FormField";
 import { Card } from "@/components/common/Card";
-import { Alert } from "@/components/common/States";
+import { toastSetter } from "@/components/common/Toast";
 import { api, ApiClientError } from "@/shared/client";
 import { requestItemLabel, type RequestDetail, type RequestItem } from "../../requests.types";
 
@@ -44,7 +44,7 @@ export function ItReviewPanel({ request, onSaved }: { request: RequestDetail; on
     )
   );
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const setError = toastSetter("error");
 
   useEffect(() => {
     const categoryIds = Array.from(new Set(request.items.map((i) => i.category.id)));
@@ -110,11 +110,6 @@ export function ItReviewPanel({ request, onSaved }: { request: RequestDetail; on
         Reserve available stock per warehouse and mark any shortfall for procurement. Partial fulfilment is supported, so
         you can come back when more stock arrives.
       </p>
-      {error && (
-        <div className="mb-5">
-          <Alert>{error}</Alert>
-        </div>
-      )}
       <div className="flex flex-col gap-6">
         {request.items.map((item) => {
           const l = lines[item.id];

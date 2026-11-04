@@ -4,7 +4,7 @@ import { MainLayout, PageHeader } from "@/components/layout/MainLayout";
 import { Card } from "@/components/common/Card";
 import { Button } from "@/components/common/Button";
 import { Input, Select, Textarea } from "@/components/common/FormField";
-import { Alert } from "@/components/common/States";
+import { toastSetter } from "@/components/common/Toast";
 import type { ProtectedPageProps } from "@/middlewares/page-auth";
 import { api, ApiClientError, useApi } from "@/shared/client";
 import { appConfig } from "@/shared/config/app.config";
@@ -27,9 +27,9 @@ export default function CreateAssetPage({ user, forbidden }: ProtectedPageProps)
   const router = useRouter();
   const [v, setV] = useState(empty);
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [formError, setFormError] = useState<string | null>(null);
+  const setFormError = toastSetter("error");
   const [saving, setSaving] = useState(false);
-  const [success, setSuccess] = useState<string | null>(null);
+  const setSuccess = toastSetter("success");
   const categories = useApi<{ id: number; name: string; isSerialized: boolean }[]>(forbidden ? null : "/master-data/categories");
   const warehouses = useApi<{ id: number; name: string }[]>(forbidden ? null : "/master-data/warehouses");
   const set = (k: keyof typeof empty, val: string) => setV((s) => ({ ...s, [k]: val }));
@@ -67,8 +67,6 @@ export default function CreateAssetPage({ user, forbidden }: ProtectedPageProps)
         breadcrumbs={[{ label: "Asset register", href: "/assets" }, { label: "Register" }]}
       />
       <form onSubmit={(e) => submit(e)} className="flex flex-col gap-6" noValidate>
-        {formError && <Alert>{formError}</Alert>}
-        {success && <Alert tone="success">{success}</Alert>}
         <Card title="Device">
           <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
             <Select

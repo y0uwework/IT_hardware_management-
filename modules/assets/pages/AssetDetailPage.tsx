@@ -9,6 +9,7 @@ import { Modal } from "@/components/common/Modal";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { LoadingState } from "@/components/common/LoadingSpinner";
 import { Alert, ErrorState } from "@/components/common/States";
+import { toastSetter } from "@/components/common/Toast";
 import { AssignModal } from "@/modules/assets/pages/components/AssignModal";
 import type { ProtectedPageProps } from "@/middlewares/page-auth";
 import { api, ApiClientError, formatDate, formatMoney, useApi } from "@/shared/client";
@@ -60,7 +61,7 @@ export default function AssetDetailPage({ user, forbidden }: ProtectedPageProps)
   const [returnOpen, setReturnOpen] = useState(false);
   const [ret, setRet] = useState({ condition: "Good", accessories: "", inspectionNotes: "", nextStatus: "Available", warehouseId: "" });
   const [busy, setBusy] = useState(false);
-  const [msg, setMsg] = useState<{ tone: "success" | "error"; text: string } | null>(null);
+  const setMsg = toastSetter("error");
   const warehouses = useApi<{ id: number; name: string }[]>(returnOpen ? "/master-data/warehouses" : null);
 
   const active = a?.assignments.find((x) => x.isActive);
@@ -112,7 +113,6 @@ export default function AssetDetailPage({ user, forbidden }: ProtectedPageProps)
       {error && <ErrorState message={error} onRetry={reload} />}
       {a && (
         <div className="flex flex-col gap-6">
-          {msg && <Alert tone={msg.tone}>{msg.text}</Alert>}
           {reservation && (
             <Alert tone="info">
               Reserved for{" "}

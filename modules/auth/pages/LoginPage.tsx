@@ -6,6 +6,7 @@ import { api, ApiClientError } from "@/shared/client";
 import { Button } from "@/components/common/Button";
 import { Input } from "@/components/common/FormField";
 import { Alert } from "@/components/common/States";
+import { toastSetter } from "@/components/common/Toast";
 import { appConfig } from "@/shared/config/app.config";
 
 export interface LoginPageProps {
@@ -20,7 +21,7 @@ function safeNext(next: unknown): string {
 export default function Login({ mode }: Props) {
   const router = useRouter();
   const [employeeCode, setEmployeeCode] = useState("");
-  const [error, setError] = useState<string | null>(null);
+  const setError = toastSetter("error");
   const [loading, setLoading] = useState(false);
 
   async function onSubmit(e: FormEvent) {
@@ -58,7 +59,6 @@ export default function Login({ mode }: Props) {
                   Development sign-in: enter an employee code from the <code className="font-mono">users</code> table. No password is
                   checked.
                 </Alert>
-                {error && <Alert>{error}</Alert>}
                 <Input
                   label="Employee code"
                   value={employeeCode}

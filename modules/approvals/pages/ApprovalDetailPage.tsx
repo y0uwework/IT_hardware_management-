@@ -8,7 +8,8 @@ import { Textarea } from "@/components/common/FormField";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { ApprovalTimeline } from "@/components/common/ApprovalTimeline";
 import { LoadingState } from "@/components/common/LoadingSpinner";
-import { Alert, ErrorState } from "@/components/common/States";
+import { ErrorState } from "@/components/common/States";
+import { toastSetter } from "@/components/common/Toast";
 import type { ProtectedPageProps } from "@/middlewares/page-auth";
 import { api, ApiClientError, formatDate, formatMoney, useApi } from "@/shared/client";
 import { hasPermission } from "@/shared/permissions";
@@ -51,8 +52,8 @@ export default function ApprovalDetailPage({ user, forbidden }: ProtectedPagePro
   const { data: task, error, loading, reload } = useApi<Task>(router.isReady && !forbidden ? `/approvals/${id}` : null);
   const [comments, setComments] = useState("");
   const [busy, setBusy] = useState<Action | null>(null);
-  const [actionError, setActionError] = useState<string | null>(null);
-  const [done, setDone] = useState<string | null>(null);
+  const setActionError = toastSetter("error");
+  const setDone = toastSetter("success");
 
   async function act(action: Action) {
     if ((action === "reject" || action === "return") && !comments.trim()) {
@@ -89,7 +90,6 @@ export default function ApprovalDetailPage({ user, forbidden }: ProtectedPagePro
       {task && req && (
         <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
           <div className="flex flex-col gap-6 xl:col-span-2">
-            {done && <Alert tone="success">{done}</Alert>}
             <Card title="Request">
               <dl className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
                 <div>
@@ -172,7 +172,6 @@ export default function ApprovalDetailPage({ user, forbidden }: ProtectedPagePro
             {pending && hasPermission(user, "approve.button") ? (
               <Card title="Your decision">
                 <div className="flex flex-col gap-4">
-                  {actionError && <Alert>{actionError}</Alert>}
                   <Textarea
                     label="Comments"
                     value={comments}
