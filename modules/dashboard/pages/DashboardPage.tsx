@@ -1,14 +1,12 @@
 import Link from "next/link";
-import { AlertTriangle, Boxes, CheckCircle, ClipboardList, Clock, Laptop, PackageCheck, Plus, Wrench } from "lucide-react";
+import { AlertTriangle, Boxes, CheckCircle, ClipboardList, Clock, Laptop, PackageCheck, Wrench } from "lucide-react";
 import { MainLayout, PageHeader } from "@/components/layout/MainLayout";
 import { Card, StatCard } from "@/components/common/Card";
-import { ButtonLink } from "@/components/common/Button";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { LoadingState } from "@/components/common/LoadingSpinner";
 import { ErrorState } from "@/components/common/States";
 import type { ProtectedPageProps } from "@/middlewares/page-auth";
 import { formatDate, useApi } from "@/shared/client";
-import { hasPermission } from "@/shared/permissions";
 
 interface Dashboard {
   myRequests?: {
@@ -41,13 +39,6 @@ export default function DashboardPage({ user, forbidden }: ProtectedPageProps) {
       <PageHeader
         title={`${greeting()}, ${user.fullName.split(" ")[0]}`}
         subtitle="Here's what needs your attention today."
-        actions={
-          hasPermission(user, "request.create") && (
-            <ButtonLink href="/requests/create">
-              <Plus size={18} aria-hidden="true" /> New request
-            </ButtonLink>
-          )
-        }
       />
       {loading && !data && <LoadingState />}
       {error && <ErrorState message={error} onRetry={reload} />}

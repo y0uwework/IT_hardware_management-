@@ -58,7 +58,10 @@ export async function recordHistory(
   );
 }
 
-/** Resolve approver user IDs for a stage. The requester can never approve their own request. */
+/**
+ * Resolve approver user IDs for a stage. The requester never approves their own request,
+ * except as the last-resort Administrator fallback (see below).
+ */
 async function resolveApprovers(
   tx: Tx,
   stage: { name: string; approverType: string; roleKey: string | null },
@@ -79,6 +82,16 @@ async function resolveApprovers(
     ids = holders.map((h) => h.id);
   }
   ids = ids.filter((id) => id !== requester.id);
+  if (ids.length === 0) {
+    // Fallback: no manager assigned (or no other role holder) → route to active Administrators.
+    // An Administrator may action their own request only when no other Administrator exists,
+    // so a single admin account can exercise the full flow end to end.
+    const admins = await query<{ id: number }>(tx, `SELECT id FROM dbo.users WHERE role = @role AND is_active = 1`, {
+      role: "ADMINISTRATOR",
+    });
+    const others = admins.map((a) => a.id).filter((id) => id !== requester.id);
+    ids = others.length > 0 ? others : admins.map((a) => a.id);
+  }
   if (ids.length === 0) {
     throw new AppError(
       "VALIDATION_ERROR",
