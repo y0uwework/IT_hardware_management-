@@ -1932,10 +1932,11 @@ Possible next statuses:
 
 This section describes the **implemented** flow step by step: who acts, when they act, where they click, what the system does, and why the step exists. Use it for onboarding, UAT scripts and support.
 
-The flow has four phases:
+The flow has five implemented phases, plus one entry route that is planned but **not yet developed**:
 
 | Phase | Owner | Starts when | Ends when |
 |---|---|---|---|
+| **A0. New-joinee onboarding** ⏳ *PENDING — to be developed* | HR | A new employee joins | HR's request for the joinee is submitted to the **joinee's manager**; from there it continues as phase A (step 3) |
 | **A. Request & approval** | Employee, approvers | Employee needs an asset | Request is **Approved** |
 | **B. IT review & stock** | IT Admin | Request is Approved | Every unit is reserved from stock or marked for purchase |
 | **C. Procurement** | Procurement Officer, Finance Manager, IT Admin | IT marks a quantity to procure | Goods are received and auto-reserved for the request |
@@ -1956,6 +1957,7 @@ Phase D runs **in parallel** with phase E. Handing the asset to the employee nev
 | Finance Officer (`FINANCE_OFFICER`) | `finance.budget.manage`, `finance.invoice.verify`, `finance.payment.manage` | Budgets, invoice entry, three-way-match verification, payment recording |
 | Finance Manager (`FINANCE_MANAGER`) | `finance.budget.manage`, `procurement.po.approve`, `finance.invoice.approve` | Approves purchase orders and verified invoices |
 | Super Admin / Administrator | `admin.workflow.manage`, `admin.roles.manage` | Configures workflows, roles and manager links |
+| HR ⏳ *PENDING* (`HR` role not yet created) | *to be defined*, e.g. `request.create.on_behalf` | Raises the onboarding asset request for a new joinee (§14.7.13) |
 
 **Separation-of-duties rules enforced by the server:**
 - the person who created a purchase order cannot approve it;
@@ -1965,10 +1967,17 @@ Phase D runs **in parallel** with phase E. Handing the asset to the employee nev
 ### 14.7.2 Flow overview
 
 ```text
+ HR  ⏳ PENDING — TO BE DEVELOPED (§14.7.13)
+ ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
+ ┆ N1 New joinee created / joins                                      ┆
+ ┆ N2 HR raises onboarding request FOR the joinee (laptop / tablet)   ┆
+ ┆ N3 Submit → routed to the JOINEE's reporting manager ┄┄┄┄┐         ┆
+ ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
+                                                            ┆ joins the normal flow at ③
  EMPLOYEE        APPROVERS        IT ADMIN                PROCUREMENT              FINANCE
  ────────        ─────────        ────────                ───────────              ───────
- ① Create
-   (Draft)
+ ① Create                  ┌┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┘
+   (Draft)                 ▼
  ② Submit ─────▶ ③ Approve
    (Pending       │ reject ─▶ Rejected (end)
     Approval)     │ return ─▶ Returned ─▶ back to ①
@@ -1993,6 +2002,9 @@ Phase D runs **in parallel** with phase E. Handing the asset to the employee nev
                       ▼
  ⑧ "I received this" ◀┘
    (Fulfilled)
+
+ Legend:  ───  implemented      ┄┄┄ / ⏳  pending, to be developed
+          For an onboarding request, "EMPLOYEE" in steps ⑦–⑧ is the new joinee.
 ```
 
 ### 14.7.3 Status maps
@@ -2244,6 +2256,7 @@ Defaults shipped by the dev seed:
 
 | # | Who | Trigger (when) | Action | Result |
 |---|---|---|---|---|
+| N1–N3 ⏳ *PENDING* | HR | New employee joins | Raise and submit onboarding request for the joinee | Pending Approval with the **joinee's manager** |
 | 1–2 | Employee | Needs an asset | Create and submit request | Pending Approval |
 | 3 | Manager / role approver | Approval notification | Approve / return / reject | Approved (or Returned / Rejected) |
 | 4–6 | IT Admin | Request Approved | Review spec, reserve stock, mark shortfall | Under IT Review / Awaiting Procurement |
@@ -2295,6 +2308,45 @@ An `ADMINISTRATOR` holds every permission, so one account can run almost the who
 9. Click **I received this**. Status becomes **Fulfilled**.
 10. **Finance → Invoices**: enter the vendor invoice for the PO, then **Verify** (three-way match). *Second account:* **Approve**.
 11. **Finance → Payments**: record the payment. The invoice becomes **Paid**. Check **Finance → Budgets** for the committed and paid amounts.
+
+### 14.7.13 New-joinee onboarding request by HR ⏳ PENDING — TO BE DEVELOPED
+
+> **Status: not implemented.** This section records the agreed business flow so it can be built later. None of steps N1–N3 exist in the application yet. Today, only an employee can raise a request for themselves.
+
+**Purpose:** when a new employee joins, HR arranges their standard starter asset (for example a laptop or tablet) before or on the joining day. The new joinee does not have to raise the request themselves.
+
+#### Planned steps
+
+| # | Who | When | Where (planned) | Do | System (planned) | Why |
+|---|---|---|---|---|---|---|
+| N1 | HR / Administrator | A new employee is added to `users` (joining date known) | Administration → Users & Access | Make sure the joinee's record is **active** and has a **reporting manager** and department | — (uses the existing users table; no new employee master, §2.1) | The joinee's manager is the approver, so the manager link must exist first |
+| N2 | HR | Before or on the joining date | Asset Requests → **New onboarding request** (new screen or a "Request for" field) | Choose the **new joinee** as the beneficiary, request type *New Asset*, and pick the starter items (laptop / tablet, accessories) | Creates the request with **requester = HR user** and **beneficiary = new joinee**. Request number, items and audit are the same as step 1 | HR owns onboarding readiness; the joinee may not have system access yet |
+| N3 | HR | Request is complete | Request page → **Submit** | Submit for approval | Selects the workflow using the **joinee's** department, and routes the manager stage to the **joinee's reporting manager**, not HR's manager. Notifies the manager, and optionally the joinee | The manager confirms the starter kit fits the joinee's role |
+| → | Joinee's manager, then same as today | Approval notification | Approvals | **Step 3 onwards, unchanged**: approve / return / reject, IT review, stock or procurement, finance | — | Re-uses the existing flow; no separate process to maintain |
+
+From step 3 onwards, everything works as described above. The only difference is that the **new joinee** is the person who receives the asset in step 7 and acknowledges it in step 8.
+
+#### Development notes (what has to change)
+
+| Area | Today | Needed for onboarding |
+|---|---|---|
+| Role | No `HR` role in `shared/config/roles.config.ts` | Add an `HR` role and a permission such as `request.create.on_behalf` to `permissions.config.ts` |
+| Data model | `hardware_requests.requester_user_id` = the person who raised it, and also the person who receives it | Add `beneficiary_user_id` (FK → `users`) via a migration. It defaults to the requester for normal requests |
+| Request form | Requester is always the signed-in user | "Request for" picker (active users, HR only), plus an onboarding request type or flag |
+| Approval routing | `startApproval` / `resolveApprovers` use the **requester's** manager and department | Use the **beneficiary's** manager and department. The self-approval check must exclude both HR and the beneficiary |
+| Submit / edit / cancel | Only the requester may submit, edit or cancel | HR (requester) may submit, edit and cancel; the beneficiary may view |
+| Visibility | "My requests" = requests the user raised | The beneficiary also sees requests raised for them |
+| Handover | `assignAsset` requires recipient = **requester** | Require recipient = **beneficiary** |
+| Acknowledgement | Assignee acknowledges | Unchanged: the joinee acknowledges, which means they need a login by then |
+| Notifications | Sent to the requester | Approval outcome → HR **and** joinee; "asset ready" → joinee (and HR) |
+| Trigger (optional) | — | Auto-create a draft onboarding request when a user with a future joining date is added |
+
+#### Open decisions
+
+1. Does HR need its own approval stage, or does the joinee's manager approve alone? (Default assumption: manager only, then the existing workflow.)
+2. Should onboarding use a dedicated request type and workflow, for example "Onboarding", with a standard kit per department or designation?
+3. What happens if the joinee has no reporting manager yet: block submission, or use the Administrator fallback (§14.7.5, step 2)?
+4. Can IT hand over before the joining date, or only from the joining date?
 
 ---
 
