@@ -196,7 +196,7 @@ export default function RequestsPage({ user, forbidden }: ProtectedPageProps) {
             error={myAssets.error}
             onRetry={myAssets.reload}
             emptyTitle="No assets issued to you"
-            emptyMessage="When IT hands over hardware, it will appear here."
+            emptyMessage="When IT hands over an asset, it will appear here."
             onRowClick={() => void router.push("/assets/mine")}
           />
         ) : (
@@ -210,7 +210,7 @@ export default function RequestsPage({ user, forbidden }: ProtectedPageProps) {
               onRetry={reload}
               emptyTitle="No requests found"
               emptyMessage={
-                scope === "mine" ? "Create a request when you need new hardware." : "Try a different filter."
+                scope === "mine" ? "Create a request when you need a new asset." : "Try a different filter."
               }
               onRowClick={(r) => void router.push(`/requests/${r.id}`)}
             />

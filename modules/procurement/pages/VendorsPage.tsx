@@ -111,7 +111,7 @@ export default function VendorsPage({ user, forbidden }: ProtectedPageProps) {
           error={list.error}
           onRetry={list.reload}
           emptyTitle="No vendors yet"
-          emptyMessage="Add the suppliers you buy hardware from."
+          emptyMessage="Add the suppliers you buy assets from."
           onRowClick={(v) => { m.setFlash(null); m.setFieldErrors({}); setEditing({ id: v.id, form: fromVendor(v) }); }}
         />
         <Pagination meta={list.meta} onPage={setPage} />

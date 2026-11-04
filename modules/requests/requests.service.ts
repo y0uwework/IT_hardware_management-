@@ -532,7 +532,7 @@ export async function saveItReview(user: AuthUser, id: number, input: ItReviewIn
       await notify(tx, {
         recipientUserId: request.requesterUserId,
         eventType: NOTIFICATION_EVENT.STOCK_RESERVED,
-        title: `Hardware reserved for ${request.requestNumber}`,
+        title: `Assets reserved for ${request.requestNumber}`,
         body: "IT has reserved stock for your request and will arrange handover.",
         link: `/requests/${id}`,
       });

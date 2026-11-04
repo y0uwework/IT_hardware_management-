@@ -1,4 +1,4 @@
-// Item master: orderable products, each belonging to a hardware category.
+// Item master: orderable products, each belonging to an asset category.
 // Rows are soft-deleted (is_deleted = 1); deleted rows are hidden everywhere except history.
 
 import { execute, getPool, likeContains, type Params, query, queryOne, type Tx, Where, withTransaction } from "../../shared/db";

@@ -109,7 +109,7 @@ export default function ItemMasterPage({ user, forbidden }: ProtectedPageProps) 
     <MainLayout user={user} title="Item master" forbidden={forbidden}>
       <PageHeader
         title="Item master"
-        subtitle="Items people can request, each linked to a hardware category."
+        subtitle="Items people can request, each linked to an asset category."
         actions={
           <div className="flex flex-wrap gap-2">
             {canBulk && (

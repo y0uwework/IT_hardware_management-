@@ -25,7 +25,7 @@ export const roles = {
   },
   IT_ADMIN: {
     name: "IT Admin",
-    description: "Reviews requests, manages stock and issues hardware",
+    description: "Reviews requests, manages stock and issues assets",
     defaultPermissions: [
       ...EMPLOYEE_BASE,
       "request.it_review",

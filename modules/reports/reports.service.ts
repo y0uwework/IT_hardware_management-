@@ -188,7 +188,7 @@ const REPORTS: ReportDef[] = [
     key: "category-expenditure",
     title: "Category-wise expenditure",
     group: "Spend",
-    description: "Units ordered and purchase value per hardware category.",
+    description: "Units ordered and purchase value per asset category.",
     permissions: ["finance.budget.manage", "finance.invoice.verify", "finance.invoice.approve", "finance.payment.manage", "procurement.manage"],
     filters: { dateRange: "PO date", department: true },
     columns: [

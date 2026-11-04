@@ -128,7 +128,7 @@ async function createTasksForStageGroup(
         recipientUserId: approverUserId,
         eventType: NOTIFICATION_EVENT.APPROVAL_PENDING,
         title: `Approval needed: ${request.requestNumber}`,
-        body: `${request.requester.fullName}'s hardware request is waiting for your ${stage.name} approval.`,
+        body: `${request.requester.fullName}'s asset request is waiting for your ${stage.name} approval.`,
         link: `/approvals/${task.id}`,
       });
     }

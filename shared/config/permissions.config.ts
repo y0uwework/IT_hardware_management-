@@ -73,12 +73,12 @@ export const permissions = [
   {
     key: "asset.create",
     module: "Assets",
-    description: "Register hardware assets",
+    description: "Register assets",
   },
   {
     key: "asset.assign",
     module: "Assets",
-    description: "Assign hardware assets",
+    description: "Assign assets",
   },
   {
     key: "asset.return",
@@ -152,7 +152,7 @@ export const permissions = [
   {
     key: "maintenance.report",
     module: "Maintenance",
-    description: "Report hardware issues and track own tickets",
+    description: "Report asset issues and track own tickets",
   },
   {
     key: "maintenance.manage",

@@ -47,12 +47,12 @@ export default function MyAssetsPage({ user, forbidden }: ProtectedPageProps) {
 
   return (
     <MainLayout user={user} title="My assets" forbidden={forbidden}>
-      <PageHeader title="My assets" subtitle="Hardware currently issued to you." />
+      <PageHeader title="My assets" subtitle="Assets currently issued to you." />
       {loading && !data && <LoadingState />}
       {error && <ErrorState message={error} onRetry={reload} />}
       {data && data.length === 0 && (
         <div className="rounded-lg border border-neutral-200 bg-surface">
-          <EmptyState title="No assets issued to you" message="When IT hands over hardware, it will appear here." />
+          <EmptyState title="No assets issued to you" message="When IT hands over an asset, it will appear here." />
         </div>
       )}
       {data && data.length > 0 && (

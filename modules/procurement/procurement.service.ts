@@ -960,7 +960,7 @@ export async function receiveGoods(actor: AuthUser, input: GoodsReceiptInput, co
       await notify(tx, {
         recipientUserId: requesterId,
         eventType: NOTIFICATION_EVENT.STOCK_RESERVED,
-        title: "Your ordered hardware has arrived",
+        title: "Your ordered assets have arrived",
         body: `Received on ${grnNumber}. IT will arrange the handover.`,
         link: `/requests/${requestId}`,
       });

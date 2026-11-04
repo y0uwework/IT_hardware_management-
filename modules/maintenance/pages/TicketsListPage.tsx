@@ -94,7 +94,7 @@ export default function MaintenancePage({ user, forbidden }: ProtectedPageProps)
     <MainLayout user={user} title="Maintenance" forbidden={forbidden}>
       <PageHeader
         title="Maintenance"
-        subtitle={manage ? "Hardware issues: assign, repair, track SLA and close." : "Report a problem with your hardware and follow the repair."}
+        subtitle={manage ? "Asset issues: assign, repair, track SLA and close." : "Report a problem with your asset and follow the repair."}
         actions={
           <Button onClick={() => { m.setFlash(null); m.setFieldErrors({}); setForm({ assetId: "", title: "", description: "", issueCategory: appConfig.issueCategories[0], priority: "Normal", severity: "Minor" }); setOpen(true); }}>
             <Plus size={18} aria-hidden="true" /> Report an issue
@@ -131,7 +131,7 @@ export default function MaintenancePage({ user, forbidden }: ProtectedPageProps)
         open={open}
         onClose={() => setOpen(false)}
         size="lg"
-        title="Report a hardware issue"
+        title="Report an asset issue"
         footer={
           <>
             <Button variant="ghost" onClick={() => setOpen(false)} disabled={!!m.busy}>Cancel</Button>

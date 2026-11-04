@@ -93,7 +93,7 @@ export default function MasterDataPage({ user, forbidden }: ProtectedPageProps) 
     <MainLayout user={user} title="Master data" forbidden={forbidden}>
       <PageHeader
         title="Master data"
-        subtitle="Hardware categories and warehouses."
+        subtitle="Asset categories and warehouses."
         actions={
           <Button onClick={openNew}>
             <Plus size={18} aria-hidden="true" /> {tab === "categories" ? "New category" : "New warehouse"}
@@ -103,7 +103,7 @@ export default function MasterDataPage({ user, forbidden }: ProtectedPageProps) 
       <div className="mb-4">
         <FilterChips
           options={[
-            { value: "categories", label: "Hardware categories" },
+            { value: "categories", label: "Asset categories" },
             { value: "warehouses", label: "Warehouses" },
           ]}
           value={tab}

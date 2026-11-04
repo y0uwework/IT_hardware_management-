@@ -1928,6 +1928,374 @@ Possible next statuses:
 - Damaged
 - Retired
 
+## 14.7 End-to-end walkthrough: employee request → handover → payment
+
+This section describes the **implemented** flow step by step: who acts, when they act, where they click, what the system does, and why the step exists. Use it for onboarding, UAT scripts and support.
+
+The flow has four phases:
+
+| Phase | Owner | Starts when | Ends when |
+|---|---|---|---|
+| **A. Request & approval** | Employee, approvers | Employee needs an asset | Request is **Approved** |
+| **B. IT review & stock** | IT Admin | Request is Approved | Every unit is reserved from stock or marked for purchase |
+| **C. Procurement** | Procurement Officer, Finance Manager, IT Admin | IT marks a quantity to procure | Goods are received and auto-reserved for the request |
+| **D. Finance** | Finance Officer, Finance Manager | Vendor sends an invoice for a placed purchase order | Invoice is **Paid** |
+| **E. Handover** | IT Admin, Employee | A unit is reserved for the request | Request is **Fulfilled** |
+
+Phase D runs **in parallel** with phase E. Handing the asset to the employee never waits for the vendor to be paid.
+
+### 14.7.1 Actors at a glance
+
+| Actor (role key) | Key permissions | Responsibility in this flow |
+|---|---|---|
+| Employee (`EMPLOYEE`) | `request.create`, `request.view`, `asset.view` | Raises the request, fixes it if returned, confirms receipt |
+| Reporting Manager (`REPORTING_MANAGER`) | `request.approve`, `approve.button` | First approval: confirms the business need |
+| Role approver, e.g. IT head (`IT_ADMIN`) | `request.approve` | Further workflow stages (e.g. high-value requests) |
+| IT Admin (`IT_ADMIN`) | `request.it_review`, `inventory.manage`, `asset.assign`, `procurement.receive` | Technical review, stock reservation, goods receipt, handover |
+| Procurement Officer (`PROCUREMENT_OFFICER`) | `procurement.manage`, `procurement.receive` | Vendors, requisitions, quotations, vendor selection, purchase orders, goods receipt |
+| Finance Officer (`FINANCE_OFFICER`) | `finance.budget.manage`, `finance.invoice.verify`, `finance.payment.manage` | Budgets, invoice entry, three-way-match verification, payment recording |
+| Finance Manager (`FINANCE_MANAGER`) | `finance.budget.manage`, `procurement.po.approve`, `finance.invoice.approve` | Approves purchase orders and verified invoices |
+| Super Admin / Administrator | `admin.workflow.manage`, `admin.roles.manage` | Configures workflows, roles and manager links |
+
+**Separation-of-duties rules enforced by the server:**
+- the person who created a purchase order cannot approve it;
+- the person who verified an invoice cannot approve it;
+- only an invoice approver can reject an invoice that is already verified.
+
+### 14.7.2 Flow overview
+
+```text
+ EMPLOYEE        APPROVERS        IT ADMIN                PROCUREMENT              FINANCE
+ ────────        ─────────        ────────                ───────────              ───────
+ ① Create
+   (Draft)
+ ② Submit ─────▶ ③ Approve
+   (Pending       │ reject ─▶ Rejected (end)
+    Approval)     │ return ─▶ Returned ─▶ back to ①
+                  ▼
+               Approved ──────▶ ④ IT review
+                                (Under IT Review)
+                                   │
+                      ┌────────────┴─────────────┐
+                      │ in stock                 │ short / no stock
+                      ▼                          ▼
+                 ⑤ Reserve                  ⑥ Mark qty to procure
+                      │                     (Awaiting Procurement) ──▶ P1 Requisition
+                      │                                                P2 Quotations + select
+                      │                                                P3 Purchase order ─────▶ P4 Approve PO
+                      │                                                P5 Send to vendor ◀────── (Finance Mgr)
+                      │                 P6 Goods receipt ◀─────────────────┘
+                      │                 (assets registered,                          F1 Enter invoice
+                      │                  auto-reserved)                               F2 Verify (3-way match)
+                      ▼                          │                                    F3 Approve invoice
+                 ⑦ Issue / hand over ◀──────────┘                                    F4 Record payment
+                      │ (Partially Fulfilled)                                         (Paid)
+                      ▼
+ ⑧ "I received this" ◀┘
+   (Fulfilled)
+```
+
+### 14.7.3 Status maps
+
+**Asset request**
+
+| Status | Reached when | Next possible statuses |
+|---|---|---|
+| Draft | Employee saves without submitting | Pending Approval, Cancelled |
+| Pending Approval | Employee submits; first stage tasks are created | Approved, Rejected, Returned for Changes, Cancelled |
+| Returned for Changes | An approver returns it with a comment | Pending Approval (resubmit), Cancelled |
+| Rejected | An approver rejects it with a comment | — (final) |
+| Approved | Last approval stage is complete (or the workflow has no stages) | Under IT Review, Cancelled |
+| Under IT Review | IT saves the first review | Awaiting Procurement, Partially Fulfilled, Fulfilled, Cancelled |
+| Awaiting Procurement | Some quantity is marked for purchase and not yet covered | Partially Fulfilled, Fulfilled |
+| Partially Fulfilled | At least one unit delivered, but not all | Awaiting Procurement, Fulfilled |
+| Fulfilled | Every unit delivered **and** every serialized handover acknowledged | — (final) |
+| Cancelled | Requester cancels (Draft / Pending Approval / Returned / Approved only) | — (final) |
+
+**Purchase requisition:** Open → Quotation Stage → Ordered → Closed (or Cancelled while Open / Quotation Stage).
+
+**Purchase order:** Draft → Pending Approval → Approved → Sent to Vendor → Partially Received → Fully Received → Closed. A rejected PO goes back from Pending Approval to Draft. A PO can be Cancelled before any goods are received.
+
+**Invoice:** Received → Verified (or Discrepancy → Verified once accepted) → Approved → Partially Paid → Paid. It can be Rejected from Received, Discrepancy or Verified.
+
+Statuses are changed only by the service layer (`shared/config/status.config.ts`). After IT review, the request status is **derived automatically** from item quantities (`modules/requests/requests.rules.ts`). Nobody sets it by hand.
+
+### 14.7.4 Step 0 — One-time and periodic setup
+
+| Who | When | Where | Do | Why |
+|---|---|---|---|---|
+| Super Admin / Administrator | Go-live; whenever people join or change teams | Administration → **Users & Access** (`/admin/users`), **Roles** (`/admin/roles`) | Give every user a role and set each employee's **reporting manager** | Approvers come from the manager link and from role holders |
+| Super Admin / Administrator | Go-live; when policy changes | Administration → **Workflows** (`/admin/workflows`) | Define at least one active approval workflow, with optional amount, department or request-type conditions | Requests cannot be submitted without a matching workflow |
+| Super Admin / Administrator | Go-live; when new models are bought | Administration → **Master Data** (`/admin/master-data`), **Item Master** (`/masters/items`) | Set up asset categories, warehouses and orderable items | Requests can only use items from the item master |
+| Procurement Officer | Before the first purchase; when a new supplier is onboarded | Procurement → **Vendors** (`/procurement/vendors`) | Add vendors with code, GSTIN, contacts and **payment terms (days)** | Quotations and POs need an active vendor; payment terms set the invoice due date |
+| Finance Officer / Finance Manager | Start of each fiscal year (April, e.g. "2026-27") | Finance → **Budgets** (`/finance/budgets`) | Create one budget per department (and cost centre) | Lets Finance track committed spend (approved POs) and paid spend against the allocation |
+
+Defaults shipped by the dev seed:
+- *Standard asset approval*: one stage, Reporting manager.
+- *High-value asset approval* (estimated value ≥ 200,000): stage 1 Reporting manager, then stage 2 IT head (`IT_ADMIN`).
+
+### 14.7.5 Phase A — Request & approval
+
+#### Step 1 — Create the request (Employee)
+
+- **When:** the employee needs a new, replacement or upgraded asset.
+- **Where:** Sidebar → **Asset Requests** (`/requests`) → **New request** (`/requests/create`).
+- **Do:** choose a **request type** (New Asset / Replacement / Upgrade), enter a **purpose** (at least 5 characters), an optional **justification**, a **priority**, an optional **required date** and **cost centre**. Then add 1–20 **items**. Each item needs an item from the master, a quantity (1–500), the required specification, and optionally an estimated unit price.
+- **Save as draft** or **Submit** right away.
+- **System:** generates the request number (`AM-…`), stores the header and items, writes an audit entry. Status: **Draft**.
+- **Why:** the purpose and specification tell approvers and IT what is needed and why. The estimated price decides which amount-based workflow applies. Leaving it blank counts as 0, so the standard workflow is used.
+
+#### Step 2 — Submit for approval (Employee)
+
+- **When:** the draft is complete, or after fixing a request that was returned.
+- **Where:** the request detail page (`/requests/[id]`) → **Submit**, or **Submit** on the create/edit form.
+- **Rules:** only the requester can submit, the request must be Draft or Returned, and it needs at least one item.
+- **System:**
+  1. Estimates the value: Σ quantity × estimated unit price.
+  2. Picks the workflow. Only the latest active version of each workflow is considered. Among those that match the request type, department and amount, the highest priority wins, then the most specific.
+  3. Stores the workflow and its version on the request.
+  4. Creates approval tasks for the first stage group and notifies the approvers.
+
+  Status: **Pending Approval**. If the workflow has no stages, the request is **auto-approved**.
+- **Why:** routing comes from configuration, not code (§8.3). Storing the version means later workflow edits never rewrite this request's history.
+- **Approver resolution:**
+  - *Manager stage* → the requester's active reporting manager.
+  - *Role stage* → every active user holding that role. Any one of them can approve.
+  - The requester is never their own approver.
+  - **Fallback:** if a stage finds no eligible approver (no manager set, or no other role holder), the tasks go to active **Administrators**. When the requester is the *only* Administrator, they receive the task themselves. This lets a single admin account test the full flow.
+  - If even that finds nobody, submission fails with "No eligible approver could be found…".
+
+#### Step 3 — Approve, reject or return (Manager / role approvers)
+
+- **When:** an approval notification arrives. Each task has a due date, 3 days by default.
+- **Where:** Sidebar → **Approvals** (`/approvals`) → open the task (`/approvals/[id]`). The task also appears on the dashboard under "Your work".
+- **Review:** requester, department, items, specifications, justification, previous approval history and the current stage.
+- **Do one of:**
+  - **Approve:** a comment is optional.
+  - **Return for changes:** a comment is **required**. Status becomes **Returned for Changes**, open tasks are closed, and the employee is notified. The employee edits the request (`/requests/[id]/edit`) and resubmits, which starts a new approval cycle.
+  - **Reject:** a comment is **required**. Status becomes **Rejected**, which is final, and the employee is notified.
+- **System:**
+  - Only the assigned approver can act, and only while the task is Pending.
+  - For a role stage, the first approval skips the sibling tasks.
+  - Stages that share a stage order run **in parallel**. The next group opens only when every stage in the current group is approved.
+  - After the last group, status becomes **Approved** and the employee is notified.
+  - Every action is written to approval history and to the audit log.
+- **Why:** the manager confirms the business need. Higher stages add budget or technical oversight. A required comment on return or reject tells the employee exactly what to fix.
+
+### 14.7.6 Phase B — IT review & stock
+
+#### Step 4 — IT review & stock check (IT Admin)
+
+- **When:** a request reaches **Approved**, shown on the dashboard tile "Awaiting IT review". Repeat whenever plans change or ordered goods arrive.
+- **Where:** Sidebar → **Asset Requests** → **IT queue** scope (`/requests?scope=it-queue`). Open the request → **IT review & stock check** panel.
+- **Do, for each item:**
+  1. Confirm or adjust the **approved specification**, for example an equivalent model.
+  2. Add **IT notes**.
+  3. Look at availability by warehouse.
+  4. Enter the quantity to **reserve** from each warehouse, and/or the quantity to **procure**.
+- **Rules:**
+  - reserved + newly procured quantity cannot exceed the units still unplanned;
+  - the procurement quantity cannot be reduced here.
+- **System:** status moves Approved → **Under IT Review**. The spec, notes, reviewer and time are saved. Reservations are made (step 5). The status is then recomputed: **Awaiting Procurement** if any shortfall is marked for purchase.
+- **Why:** IT confirms the asset is technically right and that existing stock is used before buying (§2.2). Planning per item allows **partial fulfilment**: part from stock, part purchased.
+
+#### Step 5 — Reserve stock (IT Admin, as part of step 4)
+
+- **System:**
+  - **Serialized** categories (laptops, monitors…): specific *Available* assets in the chosen warehouse become **Reserved**, one reservation per asset. The status change is conditional, so two requests can never reserve the same unit.
+  - **Quantity-tracked** categories (accessories, consumables): a count moves from available to reserved.
+  - Each reservation records a *Reserve* stock movement and expires after 14 days (`reservationExpiryDays`).
+  - The employee is notified: "Assets reserved for AM-…".
+- **Where to manage:** Inventory → **Reservations** (`/inventory/reservations`) or the request page. **Release** returns the stock if plans change.
+- **Why:** reserving holds the asset for this employee between review and handover, without issuing it yet.
+
+#### Step 6 — Mark the shortfall for procurement (IT Admin, as part of step 4)
+
+- **When:** stock is missing, short, or not the right specification.
+- **Do:** set the **procure quantity** on the item.
+- **System:** the item shows "to procure" and the request becomes **Awaiting Procurement**. The line appears in procurement's list of pending lines.
+- **Why:** this is the formal hand-off from IT to Procurement. It records exactly how many units must be bought and for which request item.
+
+### 14.7.7 Phase C — Procurement
+
+#### P1 — Raise a purchase requisition (Procurement Officer)
+
+- **When:** a request item is marked "to procure" (request status **Awaiting Procurement**).
+- **Where:** Procurement → **Requisitions** (`/procurement/requisitions`) → new requisition.
+- **Do:** pick the pending lines from approved requests. Lines from several requests can be grouped into one requisition, and extra lines from the item master can be added. Confirm quantities and estimated prices.
+- **System:** creates the requisition (`PR-…`) with status **Open**. Each line keeps its link to the original request item. If a line no longer needs procurement (for example IT reserved stock in the meantime), creation is refused: "refresh and try again".
+- **Why:** it turns individual employee needs into a single, traceable buying demand, so procurement can consolidate purchases.
+
+#### P2 — Collect quotations and select a vendor (Procurement Officer)
+
+- **When:** the requisition is Open or in Quotation Stage.
+- **Where:** Procurement → **Quotations** (`/procurement/quotations`), or the requisition detail page (`/procurement/requisitions/[id]`).
+- **Do:** record one quotation per vendor (active vendors only) with price and tax per requisition line. Compare them, then **select** the winner with a **reason**.
+- **System:** the requisition moves to **Quotation Stage**. The chosen quotation becomes **Selected** and the others **Not Selected**. A vendor cannot be selected once an order has been placed.
+- **Why:** competitive, documented vendor selection. The recorded reason is the audit evidence for why that vendor was chosen.
+
+#### P3 — Create the purchase order (Procurement Officer)
+
+- **When:** a quotation has been selected.
+- **Where:** Procurement → **Purchase Orders** (`/procurement/purchase-orders`). Raise the PO from the selected quotation, or create one directly at `/procurement/purchase-orders/create`.
+- **Do:** confirm the vendor, the **delivery warehouse**, the **department (budget)**, the cost centre, the order date and the expected delivery date. Lines and prices come from the quotation. Then **Submit for approval**.
+- **System:** creates the PO (`PO-…`), Draft → **Pending Approval**. Only one PO can be raised per quotation. Each PO line keeps its link to the request item. The requisition moves to **Ordered**.
+- **Why:** the PO is the company's commitment to spend. The department field ties the spend to that department's budget.
+
+#### P4 — Approve the purchase order (Finance Manager)
+
+- **When:** a PO is **Pending Approval** (the Finance Manager is notified).
+- **Where:** Procurement → Purchase Orders → open the PO (`/procurement/purchase-orders/[id]`).
+- **Do:** check the vendor, amount and department budget, then **Approve**, or **Reject** with a reason.
+- **Rules:** needs `procurement.po.approve`, and the approver **must not be the PO creator**.
+- **System:** Approve → **Approved**, and the PO now counts as **committed** spend against the department budget. Reject → back to **Draft** for Procurement to correct and resubmit.
+- **Why:** Finance controls spend before money is committed to a vendor (separation of duties).
+
+#### P5 — Send the PO to the vendor (Procurement Officer)
+
+- **When:** the PO is Approved.
+- **Where:** the PO detail page → **Send to vendor**.
+- **System:** the PO moves to **Sent to Vendor**. Recording a goods receipt against an Approved PO also does this automatically.
+- **Why:** it marks that the order has been placed. Invoices can only be entered from this point on.
+
+#### P6 — Receive the goods (IT Admin or Procurement Officer)
+
+- **When:** the vendor delivers, fully or in part.
+- **Where:** Procurement → **Goods Receipts** (`/procurement/goods-receipts`).
+- **Do:** choose the PO and the receiving warehouse. Enter the quantity received and rejected per line, with a rejection reason for anything refused. For serialized items, enter **one serial number per accepted unit**. Add the delivery-note number.
+- **System:**
+  - Creates the GRN (`GRN-…`).
+  - **Serialized items:** registers each accepted unit in the asset register (tag `AST-…`, cost including tax, warranty end date, linked to PO and vendor).
+  - **Quantity items:** adds the units to available stock with a *Receipt* movement.
+  - Updates the PO to **Partially Received** or **Fully Received**. A requisition closes when all its POs are done.
+  - **Auto-reserves** the accepted units for the original request item, recomputes the request status and notifies the employee: "Your ordered assets have arrived".
+- **Why:** goods enter the asset register and stock with a full audit trail. The accepted quantities are what Finance matches the invoice against.
+
+### 14.7.8 Phase D — Finance (runs in parallel with handover)
+
+#### F1 — Enter the vendor invoice (Finance Officer)
+
+- **When:** the vendor's invoice arrives. The PO must be Sent to Vendor, Partially Received, Fully Received or Closed.
+- **Where:** Finance → **Invoices** (`/finance/invoices`) → new invoice → choose the PO.
+- **Do:** the form is pre-filled from the PO lines. Enter the **vendor invoice number**, invoice date, invoiced quantities, unit price and tax per line. A due date and an attachment reference (where the scanned invoice is stored) are optional.
+- **System:** creates the invoice record with status **Received**. The same vendor invoice number cannot be entered twice for the same vendor. If no due date is given, it is calculated from the vendor's **payment terms**.
+- **Why:** it records the payable against the exact PO it relates to.
+
+#### F2 — Verify the invoice: three-way match (Finance Officer)
+
+- **When:** the invoice is Received, preferably after the goods receipt. Quantities are matched against **accepted** goods.
+- **Where:** the invoice detail page (`/finance/invoices/[id]`) → **Verify**.
+- **System checks each line:**
+  - invoiced quantity ≤ quantity accepted on goods receipts, minus anything already invoiced;
+  - unit price = PO price, within a tolerance of 0.01 (`invoicePriceTolerance`);
+  - tax rate = PO tax rate.
+- **Outcome:**
+  - all checks pass → **Verified** ("3-way match OK");
+  - any check fails → **Discrepancy**, with each issue listed. The officer can resolve it with the vendor and verify again, **accept** the discrepancy with a required explanation (→ Verified), or **Reject** the invoice.
+- **Why:** the company pays only for what was ordered, at the agreed price, and actually received in acceptable condition.
+
+#### F3 — Approve the invoice for payment (Finance Manager)
+
+- **When:** the invoice is **Verified**.
+- **Where:** the invoice detail page → **Approve**, or **Reject** with a reason.
+- **Rules:** needs `finance.invoice.approve`, and **the verifier cannot approve** the same invoice.
+- **System:** Verified → **Approved**, and the invoice becomes payable.
+- **Why:** a second person signs off before money leaves the company (separation of duties).
+
+#### F4 — Record the payment (Finance Officer)
+
+- **When:** the invoice is Approved and payment is made, normally by the due date. Overdue invoices can be filtered on the invoice list.
+- **Where:** Finance → **Payments** (`/finance/payments`), or the invoice page → record payment.
+- **Do:** enter the payment date, amount, **TDS** withheld (if any), mode (NEFT / RTGS / IMPS / UPI / Cheque / Card / Cash) and the bank or UTR **reference**.
+- **System:** creates the payment (`PAY-…`). Payment + TDS cannot exceed the outstanding amount. The invoice becomes **Partially Paid** or **Paid**. The amount is added to the department's **paid** spend in Budgets and in Reports.
+- **Why:** the payment record is separate from the invoice (§2.2: approval, procurement, invoice verification and payment are distinct events), and supports part payments and tax deduction.
+
+### 14.7.9 Phase E — Handover
+
+#### Step 7 — Hand over (IT Admin)
+
+- **When:** a unit is reserved for the request, either from stock (step 5) or after a goods receipt (P6). The employee sees the "reserved" or "arrived" notification.
+- **Where:** the request detail page (`/requests/[id]`), on each reserved line:
+  - **Issue to employee** for a reserved serialized asset. Opens the assignment form: condition, accessories, notes.
+  - **Issue stock** for reserved quantity-tracked stock.
+- **Rules (serialized assignment):**
+  - the asset is Available or Reserved for *this* request item;
+  - the recipient is the **requester** and is active;
+  - the asset category matches the item;
+  - the item is not already fully delivered;
+  - the request is in Under IT Review / Awaiting Procurement / Partially Fulfilled.
+- **System:**
+  - Asset → **Assigned**. The reservation becomes Consumed and stock moves to issued (*Issue* movement).
+  - An assignment record stores the issuer, condition and accessories.
+  - The item's delivered quantity increases and the request becomes **Partially Fulfilled**.
+  - The employee is notified: "Please acknowledge AST-…".
+  - Quantity-tracked stock is issued directly and needs no acknowledgement.
+- **Why:** a formal handover keeps the asset register accurate (who holds what, in what condition) and keeps assignment history permanently.
+
+#### Step 8 — Acknowledge receipt (Employee)
+
+- **When:** right after physically receiving the asset.
+- **Where:** the notification link, **My assets** (`/assets/mine`), or the request page → **I received this**.
+- **Rules:** only the employee who received the asset can acknowledge, once, while the assignment is active.
+- **System:** records the acknowledgement time and recomputes status. When every unit of every item is delivered **and** every serialized handover is acknowledged, the request becomes **Fulfilled**.
+- **Why:** the employee's confirmation closes the loop and is the evidence of handover for audits and exit clearance.
+
+### 14.7.10 Who does what, when (summary)
+
+| # | Who | Trigger (when) | Action | Result |
+|---|---|---|---|---|
+| 1–2 | Employee | Needs an asset | Create and submit request | Pending Approval |
+| 3 | Manager / role approver | Approval notification | Approve / return / reject | Approved (or Returned / Rejected) |
+| 4–6 | IT Admin | Request Approved | Review spec, reserve stock, mark shortfall | Under IT Review / Awaiting Procurement |
+| P1 | Procurement Officer | Line marked "to procure" | Raise requisition | PR Open |
+| P2 | Procurement Officer | PR Open | Record quotations, select vendor | Quotation Selected |
+| P3 | Procurement Officer | Quotation selected | Create PO, submit | PO Pending Approval |
+| P4 | Finance Manager | PO pending approval | Approve / reject PO | PO Approved (committed to budget) |
+| P5 | Procurement Officer | PO Approved | Send to vendor | PO Sent to Vendor |
+| P6 | IT Admin / Procurement | Delivery arrives | Goods receipt with serials | Assets registered and reserved for the request |
+| F1 | Finance Officer | Vendor invoice arrives | Enter invoice against PO | Invoice Received |
+| F2 | Finance Officer | Invoice Received (after GRN) | Three-way match verify | Verified / Discrepancy |
+| F3 | Finance Manager | Invoice Verified | Approve invoice | Invoice Approved |
+| F4 | Finance Officer | Approved, payment due | Record payment (+TDS) | Partially Paid / Paid |
+| 7 | IT Admin | Unit reserved | Issue to employee | Partially Fulfilled |
+| 8 | Employee | Asset received | "I received this" | **Fulfilled** |
+
+### 14.7.11 Exception paths
+
+| Situation | Who | What happens |
+|---|---|---|
+| Employee changes their mind | Employee | **Cancel** (Draft, Pending Approval, Returned, Approved). Open tasks are skipped and items are cancelled |
+| Request needs changes | Approver → Employee | **Return** with a comment → employee edits and resubmits → new approval cycle |
+| Request not justified | Approver | **Reject** with a comment, which is final |
+| Plan changes after reserving | IT Admin | **Release** the reservation; stock goes back to available and the request status is recomputed |
+| Requisition no longer needed | Procurement Officer | **Cancel** the requisition (Open / Quotation Stage) with a reason |
+| PO rejected by Finance | Finance Manager → Procurement | PO goes back to **Draft** for correction and resubmission |
+| Order must be stopped | Procurement Officer | **Cancel** the PO with a reason, only before any goods are received; otherwise **Close** it |
+| Damaged or short delivery | IT Admin / Procurement | Record the rejected quantity and reason on the GRN; the PO stays Partially Received until the rest arrives |
+| Invoice doesn't match PO / GRN | Finance Officer | Invoice goes to **Discrepancy**; resolve with the vendor, accept with an explanation, or reject |
+| Wrong or duplicate invoice | Finance Officer / Manager | **Reject** the invoice; a duplicate vendor invoice number is blocked at entry |
+| No approver can be found | System | Falls back to Administrators (see step 2); fails only if none exist |
+
+### 14.7.12 Test script for one account (Administrator)
+
+An `ADMINISTRATOR` holds every permission, so one account can run almost the whole flow. Two steps need **a second account**, because the separation-of-duties rules block self-approval:
+- **PO approval (P4):** use an account with `procurement.po.approve`, for example a Finance Manager.
+- **Invoice approval (F3):** use an account with `finance.invoice.approve` other than the person who verified the invoice.
+
+1. **Asset Requests → New request**: add a serialized item (e.g. a laptop) and **Submit**. With no manager set, the approval task comes back to you.
+2. **Approvals**: open the task and **Approve**. Status becomes Approved.
+3. **Asset Requests → IT queue**: open the request.
+   - *Stock path:* reserve 1 unit from a warehouse that has stock, then go to step 8.
+   - *Procurement path:* set procure quantity 1. Status becomes Awaiting Procurement.
+4. **Procurement → Requisitions**: create a requisition from the pending line.
+5. **Quotations**: add a quotation and **select** it with a reason.
+6. **Purchase Orders**: create the PO from the quotation and submit it. *Second account:* **Approve**. Then **Send to vendor**.
+7. **Goods Receipts**: receive 1 unit with a serial number. The new asset is auto-reserved for the request.
+8. On the request page, **Issue to employee**. Status becomes Partially Fulfilled.
+9. Click **I received this**. Status becomes **Fulfilled**.
+10. **Finance → Invoices**: enter the vendor invoice for the PO, then **Verify** (three-way match). *Second account:* **Approve**.
+11. **Finance → Payments**: record the payment. The invoice becomes **Paid**. Check **Finance → Budgets** for the committed and paid amounts.
+
 ---
 
 # 15. Status Management

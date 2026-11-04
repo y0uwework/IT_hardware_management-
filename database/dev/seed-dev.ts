@@ -153,7 +153,7 @@ async function main() {
   if ((await count("approval_workflows")) === 0) {
     await saveWorkflowVersion(superAdmin, {
       workflowKey: "standard-hardware",
-      name: "Standard hardware approval",
+      name: "Standard asset approval",
       requestType: null,
       department: null,
       minAmount: null,
@@ -163,7 +163,7 @@ async function main() {
     });
     await saveWorkflowVersion(superAdmin, {
       workflowKey: "high-value-hardware",
-      name: "High-value hardware approval",
+      name: "High-value asset approval",
       requestType: null,
       department: null,
       minAmount: 200000,

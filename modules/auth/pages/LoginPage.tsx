@@ -49,7 +49,7 @@ export default function Login({ mode }: Props) {
               <HardDrive size={26} aria-hidden="true" />
             </span>
             <h1 className="font-headline text-[32px] font-bold leading-tight">{appConfig.name}</h1>
-            <p className="mt-2 text-body text-neutral-600">Request, track and manage company hardware.</p>
+            <p className="mt-2 text-body text-neutral-600">Request, track and manage company assets.</p>
           </div>
 
           <div className="rounded-lg border border-neutral-200 bg-surface p-6 shadow-medium sm:p-8">

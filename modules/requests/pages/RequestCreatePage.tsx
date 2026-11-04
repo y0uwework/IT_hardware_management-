@@ -6,7 +6,7 @@ export default function CreateRequestPage({ user, forbidden }: ProtectedPageProp
   return (
     <MainLayout user={user} title="New request" forbidden={forbidden}>
       <PageHeader
-        title="New hardware request"
+        title="New asset request"
         subtitle="Tell us what you need. Your request goes through approval, then IT checks stock."
         breadcrumbs={[{ label: "Requests", href: "/requests" }, { label: "New" }]}
       />

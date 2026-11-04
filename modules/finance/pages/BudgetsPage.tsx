@@ -91,7 +91,7 @@ export default function BudgetsPage({ user, forbidden }: ProtectedPageProps) {
     <MainLayout user={user} title="Budgets" forbidden={forbidden}>
       <PageHeader
         title="Budgets"
-        subtitle="Department hardware budgets. Committed = approved purchase orders in the year; paid = payments made."
+        subtitle="Department asset budgets. Committed = approved purchase orders in the year; paid = payments made."
         actions={
           <div className="flex items-end gap-2">
             <Select aria-label="Fiscal year" value={fy} onChange={(e) => setFy(e.target.value)} options={yearOptions().map((y) => ({ value: y, label: `FY ${y}` }))} wrapperClassName="w-36" />
@@ -116,7 +116,7 @@ export default function BudgetsPage({ user, forbidden }: ProtectedPageProps) {
           error={list.error}
           onRetry={list.reload}
           emptyTitle={`No budgets for FY ${fy}`}
-          emptyMessage="Add a budget per department to track hardware spend against it."
+          emptyMessage="Add a budget per department to track asset spend against it."
           onRowClick={(b) => { m.setFlash(null); m.setFieldErrors({}); setEditing({ id: b.id, department: b.department, costCentre: b.costCentre, amount: b.amount, notes: b.notes ?? "" }); }}
         />
       </Card>
