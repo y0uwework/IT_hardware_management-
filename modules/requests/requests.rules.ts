@@ -6,7 +6,10 @@ export interface ItemState {
   fulfilledQuantity: number;
   procurementQuantity: number;
   activeReservedQuantity: number;
-  /** Assignments linked to this item that the employee has not yet acknowledged. */
+  /**
+   * Handovers linked to this item that the employee has not yet acknowledged:
+   * serialized asset assignments plus issued quantity-tracked stock.
+   */
   unacknowledgedAssignments: number;
 }
 

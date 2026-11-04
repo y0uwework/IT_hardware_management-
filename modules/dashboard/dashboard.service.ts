@@ -1,6 +1,7 @@
 import { getPool, query, queryMany, queryOne } from "../../shared/db";
 import type { AuthUser } from "../../shared/auth";
 import { userHas } from "../../middlewares/authorize";
+import { myHandoverCounts } from "../handovers/handovers.service";
 import { APPROVAL_STATUS, ASSET_STATUS, REQUEST_STATUS, RESERVATION_STATUS } from "../../shared/config/status.config";
 
 const OPEN_REQUEST_STATUSES = [
@@ -46,14 +47,10 @@ export async function getDashboard(user: AuthUser) {
   }
 
   if (userHas(user, "asset.view")) {
+    // Same source as My assets: serialized assets + issued stock.
     sections.push(
-      queryOne(
-        pool,
-        `SELECT COUNT(*) AS assigned, SUM(CASE WHEN acknowledged_at IS NULL THEN 1 ELSE 0 END) AS pendingAck
-         FROM dbo.asset_assignments WHERE user_id = @userId AND is_active = 1`,
-        { userId: user.id }
-      ).then((r) => {
-        out.myAssets = { assigned: r?.assigned ?? 0, pendingAck: r?.pendingAck ?? 0 };
+      myHandoverCounts(user).then((c) => {
+        out.myAssets = { assigned: c.total, pendingAck: c.pendingAck };
       })
     );
   }

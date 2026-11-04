@@ -67,6 +67,8 @@ export interface RequestItem {
     quantity: number;
     status: string;
     expiresAt: string | null;
+    closedAt: string | null;
+    acknowledgedAt: string | null;
     warehouse: { name: string };
     asset: { id: number; assetTag: string } | null;
   }[];

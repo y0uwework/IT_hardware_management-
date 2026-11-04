@@ -2021,7 +2021,7 @@ Phase D runs **in parallel** with phase E. Handing the asset to the employee nev
 | Under IT Review | IT saves the first review | Awaiting Procurement, Partially Fulfilled, Fulfilled, Cancelled |
 | Awaiting Procurement | Some quantity is marked for purchase and not yet covered | Partially Fulfilled, Fulfilled |
 | Partially Fulfilled | At least one unit delivered, but not all | Awaiting Procurement, Fulfilled |
-| Fulfilled | Every unit delivered **and** every serialized handover acknowledged | — (final) |
+| Fulfilled | Every unit delivered **and** every handover (asset or issued stock) acknowledged | — (final) |
 | Cancelled | Requester cancels (Draft / Pending Approval / Returned / Approved only) | — (final) |
 
 **Purchase requisition:** Open → Quotation Stage → Ordered → Closed (or Cancelled while Open / Quotation Stage).
@@ -2241,7 +2241,7 @@ Defaults shipped by the dev seed:
   - An assignment record stores the issuer, condition and accessories.
   - The item's delivered quantity increases and the request becomes **Partially Fulfilled**.
   - The employee is notified: "Please acknowledge AST-…".
-  - Quantity-tracked stock is issued directly and needs no acknowledgement.
+  - Quantity-tracked stock (**Issue stock**): the reservation becomes Consumed, stock moves to issued, and the employee is notified to acknowledge. It shows as **Issued** on the request until they do.
 - **Why:** a formal handover keeps the asset register accurate (who holds what, in what condition) and keeps assignment history permanently.
 
 #### Step 8 — Acknowledge receipt (Employee)
@@ -2249,7 +2249,7 @@ Defaults shipped by the dev seed:
 - **When:** right after physically receiving the asset.
 - **Where:** the notification link, **My assets** (`/assets/mine`), or the request page → **I received this**.
 - **Rules:** only the employee who received the asset can acknowledge, once, while the assignment is active.
-- **System:** records the acknowledgement time and recomputes status. When every unit of every item is delivered **and** every serialized handover is acknowledged, the request becomes **Fulfilled**.
+- **System:** records the acknowledgement time and recomputes status. When every unit of every item is delivered **and** every handover (serialized assets and issued stock) is acknowledged, the request becomes **Fulfilled**.
 - **Why:** the employee's confirmation closes the loop and is the evidence of handover for audits and exit clearance.
 
 ### 14.7.10 Who does what, when (summary)

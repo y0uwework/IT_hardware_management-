@@ -1,7 +1,7 @@
 // inventory module — API route handlers. Each pages/api/v1/... route file re-exports one of these.
 import { withApi } from "../../middlewares/authenticate";
 import { availability, issueConsumableReservation, listMovements, listReservations, listStock, recordManualMovement, releaseReservation } from "./inventory.service";
-import { recomputeFulfilment } from "../requests/requests.service";
+import { notifyStockIssued, recomputeFulfilment } from "../requests/requests.service";
 import { created, ok } from "../../shared/api-response";
 import { queryOne, withTransaction } from "../../shared/db";
 import { notFound } from "../../shared/errors";
@@ -62,8 +62,9 @@ export const inventoryReservationsByIdIssueHandler = withApi({
         );
         if (!item) throw notFound("Request item");
         await recomputeFulfilment(tx, item.hardwareRequestId, user.id);
+        await notifyStockIssued(tx, r.requestItemId, r.quantity);
       });
-      ok(res, null, "Stock issued");
+      ok(res, null, "Stock issued — waiting for the employee to acknowledge");
     },
   },
 });

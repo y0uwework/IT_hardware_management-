@@ -174,6 +174,7 @@ export const reservationCols = cols({
   createdByUserId: "created_by_user_id",
   createdAt: "created_at",
   closedAt: "closed_at",
+  acknowledgedAt: "acknowledged_at",
 });
 
 export const movementCols = cols({

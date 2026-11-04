@@ -13,6 +13,7 @@ import { ConfirmDialog } from "@/components/common/Modal";
 import { Input, Textarea } from "@/components/common/FormField";
 import { ItReviewPanel } from "@/modules/requests/pages/components/ItReviewPanel";
 import { AssignModal } from "@/modules/assets/pages/components/AssignModal";
+import { AcknowledgementStatus } from "@/modules/handovers/components/Acknowledge";
 import { requestItemLabel, type RequestDetail, type RequestItem } from "@/modules/requests/requests.types";
 import type { ProtectedPageProps } from "@/middlewares/page-auth";
 import { api, ApiClientError, formatDate, formatMoney, useApi } from "@/shared/client";
@@ -158,9 +159,7 @@ export default function RequestDetailPage({ user, forbidden }: ProtectedPageProp
                         run(`issue-${resId}`, () => api(`/inventory/reservations/${resId}/issue`, { method: "POST" }))
                       }
                       isOwner={isOwner}
-                      onAcknowledge={(aid) =>
-                        run(`ack-${aid}`, () => api(`/assignments/${aid}/acknowledge`, { method: "POST" }))
-                      }
+                      onAcknowledged={reload}
                     />
                   ))}
                 </ul>
@@ -264,7 +263,7 @@ function ItemRow({
   onRelease,
   onIssue,
   isOwner,
-  onAcknowledge,
+  onAcknowledged,
 }: {
   item: RequestItem;
   canAssign: boolean;
@@ -275,9 +274,11 @@ function ItemRow({
   onRelease: (r: { id: number; label: string }) => void;
   onIssue: (reservationId: number) => void;
   isOwner: boolean;
-  onAcknowledge: (assignmentId: number) => void;
+  onAcknowledged: () => unknown;
 }) {
   const active = item.reservations.filter((r) => r.status === "Active");
+  // Quantity-tracked stock handed over (serialized handovers are listed under assignments).
+  const issued = item.reservations.filter((r) => r.status === "Consumed" && !r.asset);
   return (
     <li className="border-b border-neutral-200 px-4 py-5 last:border-0 sm:px-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -308,7 +309,7 @@ function ItemRow({
         </div>
       </div>
 
-      {(active.length > 0 || item.assignments.length > 0) && (
+      {(active.length > 0 || issued.length > 0 || item.assignments.length > 0) && (
         <ul className="mt-4 flex flex-col gap-2">
           {active.map((res) => (
             <li key={res.id} className="flex flex-wrap items-center justify-between gap-2 rounded-md bg-neutral-50 px-3 py-2 text-body-sm">
@@ -342,6 +343,19 @@ function ItemRow({
               </span>
             </li>
           ))}
+          {issued.map((res) => (
+            <li key={`iss-${res.id}`} className="flex flex-wrap items-center justify-between gap-2 rounded-md bg-neutral-50 px-3 py-2 text-body-sm">
+              <span>
+                <StatusBadge status="Issued" tone="info" /> <span>{res.quantity} unit(s)</span>
+                <span className="text-neutral-500">
+                  {" "}
+                  · {res.warehouse.name}
+                  {res.closedAt ? ` · issued ${formatDate(res.closedAt)}` : ""}
+                </span>
+              </span>
+              <AcknowledgementStatus kind="stock" id={res.id} acknowledgedAt={res.acknowledgedAt} canAcknowledge={isOwner} onDone={onAcknowledged} />
+            </li>
+          ))}
           {item.assignments.map((a) => (
             <li key={a.id} className="flex flex-wrap items-center justify-between gap-2 rounded-md bg-neutral-50 px-3 py-2 text-body-sm">
               <span>
@@ -350,15 +364,7 @@ function ItemRow({
                 {a.asset.model && <span className="text-neutral-500"> · {a.asset.model}</span>}
                 <span className="text-neutral-500"> · issued {formatDate(a.assignedAt)}</span>
               </span>
-              {a.acknowledgedAt ? (
-                <span className="text-caption text-green-700">Acknowledged {formatDate(a.acknowledgedAt)}</span>
-              ) : isOwner && a.isActive ? (
-                <Button size="sm" loading={busy === `ack-${a.id}`} onClick={() => onAcknowledge(a.id)}>
-                  I received this
-                </Button>
-              ) : (
-                <span className="text-caption text-amber-700">Awaiting acknowledgement</span>
-              )}
+              <AcknowledgementStatus kind="asset" id={a.id} acknowledgedAt={a.acknowledgedAt} canAcknowledge={isOwner && a.isActive} onDone={onAcknowledged} />
             </li>
           ))}
         </ul>

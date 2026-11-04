@@ -10,6 +10,8 @@ import type { ProtectedPageProps } from "@/middlewares/page-auth";
 import { formatDate, qs, useApi } from "@/shared/client";
 import { hasPermission } from "@/shared/permissions";
 import { REQUEST_STATUS } from "@/shared/config/status.config";
+import type { Handover } from "@/modules/handovers/handovers.types";
+import { AcknowledgeButton, AcknowledgementBadge } from "@/modules/handovers/components/Acknowledge";
 
 interface Row {
   id: number;
@@ -24,58 +26,47 @@ interface Row {
   _count: { items: number };
 }
 
-interface MyAssetRow {
-  id: number;
-  assignedAt: string;
-  acknowledgedAt: string | null;
-  asset: {
-    id: number;
-    assetTag: string;
-    serialNumber: string | null;
-    manufacturer: string | null;
-    model: string | null;
-    category: { name: string };
-  };
-}
-
-const myAssetColumns: Column<MyAssetRow>[] = [
+const myAssetColumns = (onChanged: () => unknown): Column<Handover>[] => [
   {
     key: "asset",
-    header: "Asset",
-    render: (a) => (
+    header: "Asset / item",
+    render: (h) => (
       <span>
-        <span className="block text-neutral-900">
-          {[a.asset.manufacturer, a.asset.model].filter(Boolean).join(" ") || a.asset.assetTag}
+        <span className="block text-neutral-900">{h.title}</span>
+        <span className="block text-neutral-500">
+          {h.categoryName}
+          {h.kind === "stock" ? ` ·  unit(s)` : ""}
         </span>
-        <span className="block text-neutral-500">{a.asset.category.name}</span>
       </span>
     ),
   },
   {
     key: "tag",
-    header: "Asset tag",
-    render: (a) => <span className="font-mono">{a.asset.assetTag}</span>,
+    header: "Asset tag / code",
+    render: (h) => <span className="font-mono">{h.asset?.assetTag ?? h.itemCode ?? "—"}</span>,
   },
   {
-    key: "serial",
-    header: "Serial",
+    key: "request",
+    header: "Request",
     hideOnMobile: true,
-    render: (a) => <span className="font-mono">{a.asset.serialNumber ?? "—"}</span>,
+    render: (h) => <span className="font-mono">{h.request?.requestNumber ?? "—"}</span>,
   },
   {
     key: "issued",
     header: "Issued",
     hideOnMobile: true,
-    render: (a) => formatDate(a.assignedAt),
+    render: (h) => formatDate(h.issuedAt),
   },
   {
     key: "ack",
     header: "Status",
-    render: (a) =>
-      a.acknowledgedAt ? (
-        <span className="rounded-full bg-[#DCFCE7] px-2.5 py-0.5 text-caption text-[#166534]">Acknowledged</span>
+    render: (h) =>
+      h.acknowledgedAt ? (
+        <AcknowledgementBadge acknowledgedAt={h.acknowledgedAt} />
       ) : (
-        <span className="rounded-full bg-[#FEF9C3] px-2.5 py-0.5 text-caption text-[#854D0E]">Action needed</span>
+        <span onClick={(e) => e.stopPropagation()}>
+          <AcknowledgeButton kind={h.kind} id={h.id} onDone={onChanged} size="sm" />
+        </span>
       ),
   },
 ];
@@ -104,7 +95,7 @@ export default function RequestsPage({ user, forbidden }: ProtectedPageProps) {
     router.isReady && !forbidden && !showingAssets ? `/hardware-requests${qs({ scope, status, search, page })}` : null,
   );
 
-  const myAssets = useApi<MyAssetRow[]>(router.isReady && showingAssets ? "/assets/mine" : null);
+  const myAssets = useApi<Handover[]>(router.isReady && showingAssets ? "/handovers/mine" : null);
 
   const columns: Column<Row>[] = [
     {
@@ -165,7 +156,7 @@ export default function RequestsPage({ user, forbidden }: ProtectedPageProps) {
           )}
           {showingAssets ? (
             <ButtonLink href="/assets/mine" variant="ghost" size="sm">
-              Acknowledge receipt
+              Open My assets
             </ButtonLink>
           ) : (
             <div className="flex flex-col gap-3 sm:flex-row">
@@ -189,15 +180,15 @@ export default function RequestsPage({ user, forbidden }: ProtectedPageProps) {
         </div>
         {showingAssets ? (
           <DataTable
-            columns={myAssetColumns}
+            columns={myAssetColumns(myAssets.reload)}
             rows={myAssets.data}
-            rowKey={(a) => a.id}
+            rowKey={(h) => h.key}
             loading={myAssets.loading}
             error={myAssets.error}
             onRetry={myAssets.reload}
             emptyTitle="No assets issued to you"
             emptyMessage="When IT hands over an asset, it will appear here."
-            onRowClick={() => void router.push("/assets/mine")}
+            onRowClick={(h) => void router.push(h.asset ? `/assets/${h.asset.id}` : h.request ? `/requests/${h.request.id}` : "/assets/mine")}
           />
         ) : (
           <>

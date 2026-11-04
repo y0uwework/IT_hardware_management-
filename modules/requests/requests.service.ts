@@ -405,10 +405,13 @@ async function loadItemStates(tx: Tx, requestId: number) {
             (SELECT COALESCE(SUM(res.quantity), 0) FROM dbo.inventory_reservations res
               WHERE res.request_item_id = i.id AND res.status = @active) AS activeReservedQuantity,
             (SELECT COUNT(*) FROM dbo.asset_assignments aa
-              WHERE aa.request_item_id = i.id AND aa.acknowledged_at IS NULL AND aa.is_active = 1) AS unacknowledgedAssignments
+              WHERE aa.request_item_id = i.id AND aa.acknowledged_at IS NULL AND aa.is_active = 1)
+            + (SELECT COUNT(*) FROM dbo.inventory_reservations iss
+              WHERE iss.request_item_id = i.id AND iss.status = @consumed AND iss.asset_id IS NULL
+                AND iss.acknowledged_at IS NULL) AS unacknowledgedAssignments
      FROM dbo.hardware_request_items i
      WHERE i.hardware_request_id = @requestId`,
-    { requestId, active: RESERVATION_STATUS.ACTIVE }
+    { requestId, active: RESERVATION_STATUS.ACTIVE, consumed: RESERVATION_STATUS.CONSUMED }
   );
   return items.map((i) => ({
     id: i.id,
@@ -549,3 +552,71 @@ export async function saveItReview(user: AuthUser, id: number, input: ItReviewIn
     return { id, status };
   });
 }
+
+/**
+ * Called after IT issues reserved quantity-tracked stock: ask the requester to confirm receipt.
+ * The request stays Partially Fulfilled until they do (see acknowledgeIssuedStock).
+ */
+export async function notifyStockIssued(tx: Tx, requestItemId: number, quantity: number) {
+  const row = await queryOne<{ requestId: number; requestNumber: string; requesterUserId: number }>(
+    tx,
+    `SELECT r.id AS requestId, r.request_number AS requestNumber, r.requester_user_id AS requesterUserId
+     FROM dbo.hardware_request_items i JOIN dbo.hardware_requests r ON r.id = i.hardware_request_id
+     WHERE i.id = @id`,
+    { id: requestItemId }
+  );
+  if (!row) throw notFound("Request item");
+  await notify(tx, {
+    recipientUserId: row.requesterUserId,
+    eventType: NOTIFICATION_EVENT.ASSET_ACK_PENDING,
+    title: `Please acknowledge items for ${row.requestNumber}`,
+    body: `IT has issued ${quantity} unit(s) to you. Confirm you have received them.`,
+    link: `/requests/${row.requestId}`,
+  });
+  return row.requestId;
+}
+
+/** The requester confirms receipt of issued quantity-tracked stock. Only the requester can acknowledge. */
+export async function acknowledgeIssuedStock(user: AuthUser, reservationId: number, correlationId?: string) {
+  return withTransaction(async (tx) => {
+    const res = await queryOne<{
+      id: number;
+      status: string;
+      assetId: number | null;
+      acknowledgedAt: Date | null;
+      requestId: number;
+      requesterUserId: number;
+    }>(
+      tx,
+      `SELECT res.id, res.status, res.asset_id AS assetId, res.acknowledged_at AS acknowledgedAt,
+              r.id AS requestId, r.requester_user_id AS requesterUserId
+       FROM dbo.inventory_reservations res
+       JOIN dbo.hardware_request_items i ON i.id = res.request_item_id
+       JOIN dbo.hardware_requests r ON r.id = i.hardware_request_id
+       WHERE res.id = @id`,
+      { id: reservationId }
+    );
+    if (!res) throw notFound("Issued stock");
+    if (res.requesterUserId !== user.id) throw forbidden("Only the employee who received the items can acknowledge them");
+    if (res.assetId) throw new AppError("VALIDATION_ERROR", "Serialized assets are acknowledged on the asset assignment");
+    if (res.status !== RESERVATION_STATUS.CONSUMED) throw conflict("These items have not been issued yet");
+    const count = await execute(
+      tx,
+      `UPDATE dbo.inventory_reservations SET acknowledged_at = SYSUTCDATETIME() WHERE id = @id AND acknowledged_at IS NULL`,
+      { id: res.id }
+    );
+    if (count !== 1) throw conflict("Already acknowledged");
+    await recordHistory(tx, { hardwareRequestId: res.requestId, actorUserId: user.id, action: "Receipt acknowledged" });
+    const status = await recomputeFulfilment(tx, res.requestId, user.id);
+    await audit(tx, {
+      actorUserId: user.id,
+      action: "inventory.issue.acknowledge",
+      entityType: "inventory_reservation",
+      entityId: res.id,
+      after: { requestStatus: status },
+      correlationId,
+    });
+    return { id: res.id, requestStatus: status };
+  });
+}
+

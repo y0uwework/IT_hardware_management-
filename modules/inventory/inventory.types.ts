@@ -12,4 +12,6 @@ export interface Reservation {
   createdByUserId: number;
   createdAt: Date;
   closedAt: Date | null;
+  /** Set when the employee confirms receipt of issued quantity-tracked stock. */
+  acknowledgedAt: Date | null;
 }
