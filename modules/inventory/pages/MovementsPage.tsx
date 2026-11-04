@@ -49,7 +49,7 @@ export default function MovementsPage({ user, forbidden }: ProtectedPageProps) {
 
   return (
     <MainLayout user={user} title="Stock movements" forbidden={forbidden}>
-      <PageHeader title="Stock movements" subtitle="Every receipt, reservation, issue and return, in order." />
+      <PageHeader title="Stock movements" subtitle="Every receipt, reservation, issue, return and transfer, in order." />
       <Card padded={false}>
         <div className="flex justify-end border-b border-neutral-200 p-4 sm:p-6">
           <SearchInput value={search} onChange={(v) => setQuery({ search: v || undefined })} placeholder="Category or asset tag" />

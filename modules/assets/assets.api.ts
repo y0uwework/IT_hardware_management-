@@ -1,7 +1,7 @@
 // assets module — API route handlers. Each pages/api/v1/... route file re-exports one of these.
 import { withApi } from "../../middlewares/authenticate";
-import { acknowledgeAssignment, assignAsset, getAsset, listAssets, myAssets, registerAsset, returnAsset, updateAsset } from "./assets.service";
-import { assetCreateSchema, assetListSchema, assetUpdateSchema, assignSchema, returnSchema } from "./assets.validation";
+import { acknowledgeAssignment, assignAsset, getAsset, listAssets, myAssets, registerAsset, returnAsset, transferAsset, updateAsset } from "./assets.service";
+import { assetCreateSchema, assetListSchema, assetUpdateSchema, assignSchema, returnSchema, transferSchema } from "./assets.validation";
 import { created, ok } from "../../shared/api-response";
 import { parse, parseId } from "../../shared/validation";
 
@@ -65,5 +65,14 @@ export const assignmentsByIdAcknowledgeHandler = withApi({
     permission: "asset.view",
     handler: async (req, res, { user, correlationId }) =>
       ok(res, await acknowledgeAssignment(user, parseId(req.query.id), correlationId), "Receipt acknowledged"),
+  },
+});
+
+// /api/v1/assets/[id]/transfer
+export const assetsByIdTransferHandler = withApi({
+  POST: {
+    permission: "inventory.manage",
+    handler: async (req, res, { user, correlationId }) =>
+      ok(res, await transferAsset(user, parseId(req.query.id), parse(transferSchema, req.body), correlationId), "Asset transferred"),
   },
 });

@@ -60,9 +60,15 @@ export default function AssetDetailPage({ user, forbidden }: ProtectedPageProps)
   const [assignOpen, setAssignOpen] = useState(false);
   const [returnOpen, setReturnOpen] = useState(false);
   const [ret, setRet] = useState({ condition: "Good", accessories: "", inspectionNotes: "", nextStatus: "Available", warehouseId: "" });
+  const [transferOpen, setTransferOpen] = useState(false);
+  const [xfer, setXfer] = useState({ toWarehouseId: "", reason: "" });
   const [busy, setBusy] = useState(false);
   const setMsg = toastSetter("error");
-  const warehouses = useApi<{ id: number; name: string }[]>(returnOpen ? "/master-data/warehouses" : null);
+  const warehouses = useApi<{ id: number; name: string }[]>(returnOpen || transferOpen ? "/master-data/warehouses" : null);
+  const canTransfer =
+    !!a &&
+    ([ASSET_STATUS.AVAILABLE, ASSET_STATUS.UNDER_MAINTENANCE, ASSET_STATUS.DAMAGED] as string[]).includes(a.status) &&
+    hasPermission(user, "inventory.manage");
 
   const active = a?.assignments.find((x) => x.isActive);
   const reservation = a?.reservations[0];
@@ -85,6 +91,22 @@ export default function AssetDetailPage({ user, forbidden }: ProtectedPageProps)
     }
   }
 
+  async function submitTransfer() {
+    setBusy(true);
+    setMsg(null);
+    try {
+      await api(`/assets/${id}/transfer`, { method: "POST", body: { toWarehouseId: Number(xfer.toWarehouseId) || 0, reason: xfer.reason } });
+      setTransferOpen(false);
+      setXfer({ toWarehouseId: "", reason: "" });
+      setMsg({ tone: "success", text: "Asset transferred to the new warehouse." });
+      await reload();
+    } catch (e) {
+      setMsg({ tone: "error", text: e instanceof ApiClientError ? e.message : "Could not transfer the asset" });
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <MainLayout user={user} title={a?.assetTag ?? "Asset"} forbidden={forbidden}>
       <PageHeader
@@ -94,6 +116,11 @@ export default function AssetDetailPage({ user, forbidden }: ProtectedPageProps)
         actions={
           a && (
             <>
+              {canTransfer && (
+                <Button variant="secondary" onClick={() => setTransferOpen(true)}>
+                  Transfer
+                </Button>
+              )}
               {a.status === ASSET_STATUS.ASSIGNED && hasPermission(user, "asset.return") && (
                 <Button variant="secondary" onClick={() => setReturnOpen(true)}>
                   Process return
@@ -274,6 +301,41 @@ export default function AssetDetailPage({ user, forbidden }: ProtectedPageProps)
           />
           <Input label="Accessories returned" value={ret.accessories} onChange={(e) => setRet({ ...ret, accessories: e.target.value })} />
           <Textarea label="Inspection notes" value={ret.inspectionNotes} onChange={(e) => setRet({ ...ret, inspectionNotes: e.target.value })} rows={3} />
+        </div>
+      </Modal>
+
+      <Modal
+        open={transferOpen}
+        onClose={() => setTransferOpen(false)}
+        title={`Transfer ${a?.assetTag ?? ""}`}
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setTransferOpen(false)} disabled={busy}>
+              Cancel
+            </Button>
+            <Button onClick={submitTransfer} loading={busy}>
+              Transfer
+            </Button>
+          </>
+        }
+      >
+        <div className="flex flex-col gap-4">
+          <Input label="From warehouse" value={a?.warehouse?.name ?? "—"} disabled readOnly />
+          <Select
+            label="To warehouse"
+            required
+            value={xfer.toWarehouseId}
+            onChange={(e) => setXfer({ ...xfer, toWarehouseId: e.target.value })}
+            placeholder="Choose a warehouse"
+            options={(warehouses.data ?? []).filter((w) => w.id !== a?.warehouse?.id).map((w) => ({ value: w.id, label: w.name }))}
+          />
+          <Input
+            label="Reason"
+            required
+            value={xfer.reason}
+            onChange={(e) => setXfer({ ...xfer, reason: e.target.value })}
+            placeholder="e.g. Moving stock to the branch office"
+          />
         </div>
       </Modal>
     </MainLayout>

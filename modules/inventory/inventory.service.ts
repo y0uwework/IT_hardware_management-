@@ -428,3 +428,96 @@ export async function listMovements(p: Pagination) {
   ]);
   return { items, total: total?.total ?? 0 };
 }
+
+/** Write the paired Transfer Out / Transfer In movement rows for one transfer. */
+export async function recordTransferRows(
+  tx: Tx,
+  t: {
+    categoryId: number;
+    fromWarehouse: { id: number; name: string };
+    toWarehouse: { id: number; name: string };
+    assetId?: number | null;
+    quantity: number;
+    reason: string;
+    actorId: number;
+  }
+) {
+  await recordMovementRow(tx, {
+    categoryId: t.categoryId,
+    warehouseId: t.fromWarehouse.id,
+    assetId: t.assetId,
+    movementType: MOVEMENT_TYPE.TRANSFER_OUT,
+    quantity: t.quantity,
+    reason: `To ${t.toWarehouse.name} · ${t.reason}`,
+    referenceType: "warehouse",
+    referenceId: t.toWarehouse.id,
+    actorId: t.actorId,
+  });
+  await recordMovementRow(tx, {
+    categoryId: t.categoryId,
+    warehouseId: t.toWarehouse.id,
+    assetId: t.assetId,
+    movementType: MOVEMENT_TYPE.TRANSFER_IN,
+    quantity: t.quantity,
+    reason: `From ${t.fromWarehouse.name} · ${t.reason}`,
+    referenceType: "warehouse",
+    referenceId: t.fromWarehouse.id,
+    actorId: t.actorId,
+  });
+}
+
+/** Load the two warehouses of a transfer; the destination must be active and different. */
+export async function loadTransferWarehouses(tx: Tx, fromWarehouseId: number, toWarehouseId: number) {
+  if (fromWarehouseId === toWarehouseId) {
+    throw new AppError("VALIDATION_ERROR", "Source and destination warehouses must be different");
+  }
+  const rows = await query<{ id: number; name: string; isActive: boolean }>(
+    tx,
+    `SELECT id, name, is_active AS isActive FROM dbo.warehouses WHERE id IN (@fromId, @toId)`,
+    { fromId: fromWarehouseId, toId: toWarehouseId }
+  );
+  const from = rows.find((w) => w.id === fromWarehouseId);
+  const to = rows.find((w) => w.id === toWarehouseId);
+  if (!from) throw notFound("Source warehouse");
+  if (!to || !to.isActive) throw new AppError("VALIDATION_ERROR", "Destination warehouse is invalid or inactive");
+  return { from, to };
+}
+
+/** Move available quantity-tracked stock from one warehouse to another. */
+export async function transferStock(
+  actor: AuthUser,
+  input: { categoryId: number; fromWarehouseId: number; toWarehouseId: number; quantity: number; reason: string },
+  correlationId?: string
+) {
+  return withTransaction(async (tx) => {
+    const category = await queryOne<{ isSerialized: boolean }>(
+      tx,
+      `SELECT is_serialized AS isSerialized FROM dbo.hardware_categories WHERE id = @id`,
+      { id: input.categoryId }
+    );
+    if (!category) throw notFound("Category");
+    if (category.isSerialized) {
+      throw new AppError("VALIDATION_ERROR", "Serialized assets are transferred one by one from the asset page");
+    }
+    const { from, to } = await loadTransferWarehouses(tx, input.fromWarehouseId, input.toWarehouseId);
+
+    await moveStock(tx, input.categoryId, from.id, input.quantity, "quantityAvailable", null);
+    await moveStock(tx, input.categoryId, to.id, input.quantity, null, "quantityAvailable");
+    await recordTransferRows(tx, {
+      categoryId: input.categoryId,
+      fromWarehouse: from,
+      toWarehouse: to,
+      quantity: input.quantity,
+      reason: input.reason,
+      actorId: actor.id,
+    });
+    await audit(tx, {
+      actorUserId: actor.id,
+      action: "inventory.transfer",
+      entityType: "inventory_stock",
+      entityId: `${input.categoryId}:${from.id}->${to.id}`,
+      after: input,
+      correlationId,
+    });
+  });
+}

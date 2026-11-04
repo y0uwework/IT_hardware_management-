@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useRouter } from "next/router";
-import { Plus } from "lucide-react";
+import { ArrowLeftRight, Plus } from "lucide-react";
 import { MainLayout, PageHeader } from "@/components/layout/MainLayout";
 import { Card } from "@/components/common/Card";
 import { Button } from "@/components/common/Button";
@@ -60,6 +60,32 @@ export default function InventoryPage({ user, forbidden }: ProtectedPageProps) {
     }
   }
 
+  const emptyTransfer = { categoryId: "", fromWarehouseId: "", toWarehouseId: "", quantity: "", reason: "" };
+  const [xferOpen, setXferOpen] = useState(false);
+  const [xfer, setXfer] = useState(emptyTransfer);
+  const sourceStock = useApi<Row[]>(
+    xferOpen && xfer.categoryId && xfer.fromWarehouseId
+      ? `/inventory${qs({ categoryId: xfer.categoryId, warehouseId: xfer.fromWarehouseId })}`
+      : null
+  );
+  const sourceAvailable = sourceStock.data?.[0]?.quantityAvailable ?? 0;
+
+  async function saveTransfer() {
+    setSaving(true);
+    setMvError(null);
+    try {
+      await api("/inventory/transfers", { method: "POST", body: xfer });
+      setXferOpen(false);
+      setXfer(emptyTransfer);
+      setMvError({ tone: "success", text: "Stock transferred." });
+      await reload();
+    } catch (e) {
+      setMvError(e instanceof ApiClientError ? e.message : "Could not transfer the stock");
+    } finally {
+      setSaving(false);
+    }
+  }
+
   const columns: Column<Row>[] = [
     {
       key: "cat",
@@ -86,9 +112,14 @@ export default function InventoryPage({ user, forbidden }: ProtectedPageProps) {
         subtitle="Stock by category and warehouse."
         actions={
           hasPermission(user, "inventory.manage") && (
-            <Button onClick={() => setOpen(true)}>
-              <Plus size={18} aria-hidden="true" /> Record movement
-            </Button>
+            <>
+              <Button variant="secondary" onClick={() => setXferOpen(true)}>
+                <ArrowLeftRight size={18} aria-hidden="true" /> Transfer stock
+              </Button>
+              <Button onClick={() => setOpen(true)}>
+                <Plus size={18} aria-hidden="true" /> Record movement
+              </Button>
+            </>
           )
         }
       />
@@ -159,6 +190,60 @@ export default function InventoryPage({ user, forbidden }: ProtectedPageProps) {
             helper={mv.movementType === "Adjustment" ? "Use a negative number to reduce stock." : undefined}
           />
           <Input label="Reason" required value={mv.reason} onChange={(e) => setMv({ ...mv, reason: e.target.value })} placeholder="e.g. Delivery note DN-4471" />
+        </div>
+      </Modal>
+
+      <Modal
+        open={xferOpen}
+        onClose={() => setXferOpen(false)}
+        title="Transfer stock between warehouses"
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setXferOpen(false)} disabled={saving}>
+              Cancel
+            </Button>
+            <Button onClick={saveTransfer} loading={saving}>
+              Transfer
+            </Button>
+          </>
+        }
+      >
+        <div className="flex flex-col gap-4">
+          <Alert tone="info">Moves available quantity-tracked stock. Serialized devices are transferred one by one from the asset page.</Alert>
+          <Select
+            label="Category"
+            required
+            value={xfer.categoryId}
+            onChange={(e) => setXfer({ ...xfer, categoryId: e.target.value })}
+            placeholder="Choose a category"
+            options={(categories.data ?? []).filter((c) => !c.isSerialized).map((c) => ({ value: c.id, label: c.name }))}
+          />
+          <Select
+            label="From warehouse"
+            required
+            value={xfer.fromWarehouseId}
+            onChange={(e) => setXfer({ ...xfer, fromWarehouseId: e.target.value })}
+            placeholder="Choose a warehouse"
+            options={(warehouses.data ?? []).map((w) => ({ value: w.id, label: w.name }))}
+          />
+          <Select
+            label="To warehouse"
+            required
+            value={xfer.toWarehouseId}
+            onChange={(e) => setXfer({ ...xfer, toWarehouseId: e.target.value })}
+            placeholder="Choose a warehouse"
+            options={(warehouses.data ?? []).filter((w) => String(w.id) !== xfer.fromWarehouseId).map((w) => ({ value: w.id, label: w.name }))}
+          />
+          <Input
+            label="Quantity"
+            required
+            type="number"
+            min={1}
+            value={xfer.quantity}
+            onChange={(e) => setXfer({ ...xfer, quantity: e.target.value })}
+            helper={xfer.categoryId && xfer.fromWarehouseId ? `${sourceAvailable} available in the source warehouse.` : undefined}
+          />
+          <Input label="Reason" required value={xfer.reason} onChange={(e) => setXfer({ ...xfer, reason: e.target.value })} placeholder="e.g. Rebalancing stock for branch office" />
         </div>
       </Modal>
     </MainLayout>

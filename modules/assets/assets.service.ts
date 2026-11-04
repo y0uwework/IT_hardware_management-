@@ -7,11 +7,11 @@ import { appConfig } from "../../shared/config/app.config";
 import { audit } from "../../shared/audit";
 import { assetCols, assignmentCols, movementCols, reservationCols } from "../../shared/sql-columns";
 import { userHas } from "../../middlewares/authorize";
-import { moveStock, recordMovementRow } from "../inventory/inventory.service";
+import { loadTransferWarehouses, moveStock, recordMovementRow, recordTransferRows } from "../inventory/inventory.service";
 import { NOTIFICATION_EVENT, notify } from "../notifications/notifications.service";
 import { recomputeFulfilment } from "../requests/requests.service";
 import { skipTake } from "../../shared/validation";
-import type { AssetCreateInput, AssetListQuery, AssetUpdateInput, AssignInput, ReturnInput } from "./assets.types";
+import type { AssetCreateInput, AssetListQuery, AssetUpdateInput, AssignInput, ReturnInput, TransferInput } from "./assets.types";
 
 const ASSIGNABLE_REQUEST_STATUSES: RequestStatus[] = [
   REQUEST_STATUS.UNDER_IT_REVIEW,
@@ -509,5 +509,65 @@ export async function returnAsset(user: AuthUser, assetId: number, input: Return
       correlationId,
     });
     return { id: asset.id, status: input.nextStatus };
+  });
+}
+
+/** Stock counter that holds an asset in each transferable status. */
+const TRANSFER_COUNTER = {
+  [ASSET_STATUS.AVAILABLE]: "quantityAvailable",
+  [ASSET_STATUS.UNDER_MAINTENANCE]: "quantityUnderRepair",
+  [ASSET_STATUS.DAMAGED]: "quantityDamaged",
+} as const;
+
+/**
+ * Move an asset that is sitting in a warehouse to another warehouse. Assigned and reserved
+ * assets cannot move (they belong to an employee or a request); return or release them first.
+ */
+export async function transferAsset(user: AuthUser, assetId: number, input: TransferInput, correlationId?: string) {
+  return withTransaction(async (tx) => {
+    const asset = await loadAsset(tx, assetId);
+    if (!asset) throw notFound("Asset");
+    const counter = TRANSFER_COUNTER[asset.status as keyof typeof TRANSFER_COUNTER];
+    if (!counter) {
+      const hint =
+        asset.status === ASSET_STATUS.ASSIGNED
+          ? " Process the return first."
+          : asset.status === ASSET_STATUS.RESERVED
+            ? " Release the reservation first."
+            : "";
+      throw conflict(`Asset is ${asset.status.toLowerCase()} and cannot be transferred.${hint}`);
+    }
+    if (!asset.warehouseId) throw new AppError("VALIDATION_ERROR", "Asset has no warehouse recorded");
+    const { from, to } = await loadTransferWarehouses(tx, asset.warehouseId, input.toWarehouseId);
+
+    const count = await execute(
+      tx,
+      `UPDATE dbo.assets SET warehouse_id = @toId, updated_at = SYSUTCDATETIME()
+       WHERE id = @id AND warehouse_id = @fromId AND status = @status`,
+      { id: asset.id, toId: to.id, fromId: from.id, status: asset.status }
+    );
+    if (count !== 1) throw conflict("Asset changed while transferring; please retry");
+
+    await moveStock(tx, asset.categoryId, from.id, 1, counter, null);
+    await moveStock(tx, asset.categoryId, to.id, 1, null, counter);
+    await recordTransferRows(tx, {
+      categoryId: asset.categoryId,
+      fromWarehouse: from,
+      toWarehouse: to,
+      assetId: asset.id,
+      quantity: 1,
+      reason: input.reason,
+      actorId: user.id,
+    });
+    await audit(tx, {
+      actorUserId: user.id,
+      action: "asset.transfer",
+      entityType: "asset",
+      entityId: asset.id,
+      before: { warehouseId: from.id },
+      after: { warehouseId: to.id, reason: input.reason },
+      correlationId,
+    });
+    return { id: asset.id, warehouseId: to.id };
   });
 }

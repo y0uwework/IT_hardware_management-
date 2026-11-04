@@ -63,3 +63,8 @@ export const assetListSchema = z.object({
   categoryId: z.coerce.number().int().positive().optional(),
   warehouseId: z.coerce.number().int().positive().optional(),
 });
+
+export const transferSchema = z.object({
+  toWarehouseId: z.coerce.number().int().positive({ message: "Choose the destination warehouse" }),
+  reason: z.string().trim().min(3, "A reason is required").max(500),
+});

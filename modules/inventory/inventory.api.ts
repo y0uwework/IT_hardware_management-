@@ -1,12 +1,12 @@
 // inventory module — API route handlers. Each pages/api/v1/... route file re-exports one of these.
 import { withApi } from "../../middlewares/authenticate";
-import { availability, issueConsumableReservation, listMovements, listReservations, listStock, recordManualMovement, releaseReservation } from "./inventory.service";
+import { availability, issueConsumableReservation, listMovements, listReservations, listStock, recordManualMovement, releaseReservation, transferStock } from "./inventory.service";
 import { notifyStockIssued, recomputeFulfilment } from "../requests/requests.service";
 import { created, ok } from "../../shared/api-response";
 import { queryOne, withTransaction } from "../../shared/db";
 import { notFound } from "../../shared/errors";
 import { paginationSchema, parse, parseId } from "../../shared/validation";
-import { movementSchema, releaseReservationSchema, reservationListSchema, stockListSchema } from "./inventory.validation";
+import { movementSchema, releaseReservationSchema, reservationListSchema, stockListSchema, transferSchema } from "./inventory.validation";
 
 // /api/v1/inventory/availability
 export const inventoryAvailabilityHandler = withApi({
@@ -101,6 +101,17 @@ export const inventoryReservationsHandler = withApi({
       const q = parse(reservationListSchema, req.query);
       const { items, total } = await listReservations(q);
       ok(res, items, "Reservations", { page: q.page, limit: q.limit, total });
+    },
+  },
+});
+
+// /api/v1/inventory/transfers
+export const inventoryTransfersHandler = withApi({
+  POST: {
+    permission: "inventory.manage",
+    handler: async (req, res, { user, correlationId }) => {
+      await transferStock(user, parse(transferSchema, req.body), correlationId);
+      created(res, null, "Stock transferred");
     },
   },
 });
