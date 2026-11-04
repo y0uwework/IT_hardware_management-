@@ -2,6 +2,26 @@ import type { IncomingMessage } from "http";
 import { getPool, query, queryOne } from "./db";
 import { getSessionCookie, readSessionToken } from "./session";
 import { isRoleKey, type RoleKey, roleName } from "./config/roles.config";
+import { PERMISSION_KEYS } from "./config/permissions.config";
+import { logger } from "./logger";
+
+let rbacOffWarned = false;
+
+/**
+ * RBAC master switch, read from the `RunAuthrization` env variable.
+ * "true" (or unset) → permissions are enforced on every page, API and action.
+ * "false" → every signed-in user is treated as holding every permission, so no
+ * permission check anywhere in the app blocks them. Sign-in is still required.
+ */
+export function isRbacEnabled(): boolean {
+  const raw = process.env.RunAuthrization?.trim().toLowerCase();
+  const enabled = raw !== "false" && raw !== "0" && raw !== "no" && raw !== "off";
+  if (!enabled && !rbacOffWarned) {
+    rbacOffWarned = true;
+    logger.warn("RBAC is DISABLED (RunAuthrization=false): every signed-in user has all permissions");
+  }
+  return enabled;
+}
 
 /** Parse the users.permissions JSON column into permission IDs. Invalid content yields []. */
 export function parsePermissionIds(raw: string | null | undefined): number[] {
@@ -61,7 +81,9 @@ export async function loadAuthUser(userId: number): Promise<AuthUser | null> {
   if (!user || !user.isActive) return null;
 
   const ids = parsePermissionIds(user.permissions);
-  const permissions = ids.length
+  const permissions = !isRbacEnabled()
+    ? [...PERMISSION_KEYS].sort()
+    : ids.length
     ? (
         await query<{ permissionKey: string }>(
           pool,
