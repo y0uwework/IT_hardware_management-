@@ -74,7 +74,27 @@ export default function ItemMasterPage({ user, forbidden }: ProtectedPageProps) 
       ),
     },
     { key: "category", header: "Category", hideOnMobile: true, render: (i) => i.category.name },
-    { key: "type", header: "Type", hideOnMobile: true, render: (i) => i.itemType },
+    {
+      key: "type",
+      header: "Type",
+      hideOnMobile: true,
+      render: (i) => {
+        if (i.itemType !== "Software") return i.itemType;
+        const licence = [
+          i.softwareVersion,
+          i.licenceType,
+          i.licenceSeats ? `${i.licenceSeats} seat${i.licenceSeats === 1 ? "" : "s"}` : null,
+        ]
+          .filter(Boolean)
+          .join(" · ");
+        return (
+          <span>
+            <span className="block">{i.itemType}</span>
+            {licence && <span className="block text-neutral-500">{licence}</span>}
+          </span>
+        );
+      },
+    },
     { key: "uom", header: "UoM", hideOnMobile: true, render: (i) => i.unitOfMeasure },
     { key: "cost", header: "Std. cost", hideOnMobile: true, render: (i) => (i.standardCost ? formatMoney(i.standardCost) : "—") },
     {

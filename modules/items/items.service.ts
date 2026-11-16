@@ -29,6 +29,9 @@ const COLUMNS: Record<keyof ItemInput, string> = {
   standardCost: "standard_cost",
   warrantyMonths: "warranty_months",
   reorderLevel: "reorder_level",
+  softwareVersion: "software_version",
+  licenceType: "licence_type",
+  licenceSeats: "licence_seats",
   isActive: "is_active",
 };
 const FIELDS = Object.keys(COLUMNS) as (keyof ItemInput)[];
@@ -208,6 +211,9 @@ function sheetRowToInput(r: ItemSheetRow, categoryId: number | undefined) {
     standardCost: r.standard_cost?.replace(/,/g, ""),
     warrantyMonths: r.warranty_months,
     reorderLevel: r.reorder_level,
+    softwareVersion: r.software_version,
+    licenceType: r.licence_type,
+    licenceSeats: r.licence_seats,
     isActive: r.is_active,
   };
 }
@@ -222,6 +228,9 @@ const FIELD_LABELS: Record<string, string> = {
   standardCost: "standard_cost",
   warrantyMonths: "warranty_months",
   reorderLevel: "reorder_level",
+  softwareVersion: "software_version",
+  licenceType: "licence_type",
+  licenceSeats: "licence_seats",
   isActive: "is_active",
 };
 
@@ -244,7 +253,7 @@ export async function bulkCreateItems(actor: AuthUser, rows: ItemSheetRow[], cor
     const codes = new Map(existing.map((e) => [e.itemCode.toUpperCase(), "database"]));
     const names = new Map(existing.map((e) => [e.itemName.trim().toUpperCase(), "database"]));
 
-    const { itemTypes, unitsOfMeasure } = appConfig;
+    const { itemTypes, unitsOfMeasure, licenceTypes } = appConfig;
     const canon = (list: readonly string[], v: string | undefined) => list.find((x) => x.toUpperCase() === v?.trim().toUpperCase()) ?? v;
 
     const results: BulkRowResult[] = [];
@@ -264,6 +273,7 @@ export async function bulkCreateItems(actor: AuthUser, rows: ItemSheetRow[], cor
         ...sheetRowToInput(raw, category?.id),
         itemType: canon(itemTypes, raw.item_type),
         unitOfMeasure: canon(unitsOfMeasure, raw.unit_of_measure),
+        licenceType: canon(licenceTypes, raw.licence_type),
       });
       if (!parsed.success) {
         for (const issue of parsed.error.issues) {

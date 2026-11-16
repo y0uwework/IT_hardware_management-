@@ -16,6 +16,9 @@ export const ITEM_SHEET_COLUMNS = [
   "standard_cost",
   "warranty_months",
   "reorder_level",
+  "software_version",
+  "licence_type",
+  "licence_seats",
   "description",
   "is_active",
 ] as const;
@@ -55,8 +58,9 @@ export function itemSampleCsv(categoryCodes: string[]): string {
     "﻿" +
     toCsv([
       [...ITEM_SHEET_COLUMNS],
-      ["LAP-DL5440", "Dell Latitude 5440 14in", cat(0), "Hardware", "Dell", "Latitude 5440", "N010L544014IN", "Nos", "84713010", "72000", "36", "5", "Intel i5, 16GB RAM, 512GB SSD, 14-inch FHD, Windows 11 Pro", "Yes"],
-      ["ACC-MK270", "Logitech MK270 Wireless Combo", cat(1), "Accessory", "Logitech", "MK270", "920-004536", "Set", "84716060", "1800", "12", "20", "Wireless keyboard and mouse combo", "Yes"],
+      ["LAP-DL5440", "Dell Latitude 5440 14in", cat(0), "Hardware", "Dell", "Latitude 5440", "N010L544014IN", "Nos", "84713010", "72000", "36", "5", "", "", "", "Intel i5, 16GB RAM, 512GB SSD, 14-inch FHD, Windows 11 Pro", "Yes"],
+      ["ACC-MK270", "Logitech MK270 Wireless Combo", cat(1), "Accessory", "Logitech", "MK270", "920-004536", "Set", "84716060", "1800", "12", "20", "", "", "", "Wireless keyboard and mouse combo", "Yes"],
+      ["SW-M365-E3", "Microsoft 365 E3", cat(2), "Software", "Microsoft", "Microsoft 365", "M365-E3", "Licence", "997331", "24000", "", "3", "E3", "Subscription", "25", "Per-user annual subscription: Office apps, Teams, 1TB OneDrive", "Yes"],
     ])
   );
 }

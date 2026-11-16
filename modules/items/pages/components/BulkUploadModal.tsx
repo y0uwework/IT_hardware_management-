@@ -155,6 +155,11 @@ export function BulkUploadModal({
               <p>
                 <span className="font-semibold">is_active:</span> Yes / No (default Yes)
               </p>
+              <p>
+                <span className="font-semibold">software_version, licence_type, licence_seats:</span> optional, used when
+                item_type is Software ({appConfig.licenceTypes.join(", ")}); seats must be a whole number ≥ 1. Leave blank
+                for other item types.
+              </p>
             </div>
             <div>
               <input

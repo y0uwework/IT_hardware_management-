@@ -15,6 +15,10 @@ export interface ItemRow {
   standardCost: string | null;
   warrantyMonths: number | null;
   reorderLevel: number | null;
+  // Software only.
+  softwareVersion: string | null;
+  licenceType: string | null;
+  licenceSeats: number | null;
   isActive: boolean;
   createdAt: string;
   updatedAt: string;

@@ -28,15 +28,24 @@ describe("sheetRowsFromCsv", () => {
     expect(rows).toEqual([{ item_code: "lap-1", item_name: "Laptop", category_code: "LAPTOP", item_type: "Hardware" }]);
   });
 
+  it("carries the software licence columns", () => {
+    const rows = sheetRowsFromCsv([
+      ["item_code", "item_name", "category_code", "item_type", "software_version", "licence_type", "licence_seats"],
+      ["sw-m365-e3", "Microsoft 365 E3", "SOFTWARE", "Software", "E3", "Subscription", "25"],
+    ]);
+    expect(rows[0]).toMatchObject({ software_version: "E3", licence_type: "Subscription", licence_seats: "25" });
+  });
+
   it("rejects a sheet missing required columns", () => {
     expect(() => sheetRowsFromCsv([["item_code", "item_name"]])).toThrow(/category_code, item_type/);
   });
 
   it("parses the sample sheet it generates", () => {
-    const rows = sheetRowsFromCsv(parseCsv(itemSampleCsv(["LAPTOP", "KEYBOARD"])));
-    expect(rows).toHaveLength(2);
+    const rows = sheetRowsFromCsv(parseCsv(itemSampleCsv(["LAPTOP", "KEYBOARD", "SOFTWARE"])));
+    expect(rows).toHaveLength(3);
     expect(Object.keys(rows[0])).toEqual([...ITEM_SHEET_COLUMNS]);
     expect(rows[1].category_code).toBe("KEYBOARD");
+    expect(rows[2]).toMatchObject({ item_type: "Software", licence_type: "Subscription", licence_seats: "25" });
   });
 });
 
@@ -59,6 +68,20 @@ describe("itemInputSchema", () => {
   it("accepts Yes/No for is_active and numeric strings", () => {
     const r = itemInputSchema.parse({ ...base, isActive: "No", standardCost: "1250.50", reorderLevel: "5" });
     expect(r).toMatchObject({ isActive: false, standardCost: 1250.5, reorderLevel: 5 });
+  });
+
+  it("keeps licence details on software and drops them from other item types", () => {
+    const sw = itemInputSchema.parse({
+      ...base,
+      itemType: "Software",
+      softwareVersion: " 2024 ",
+      licenceType: "Subscription",
+      licenceSeats: "10",
+    });
+    expect(sw).toMatchObject({ softwareVersion: "2024", licenceType: "Subscription", licenceSeats: 10 });
+
+    const hw = itemInputSchema.parse({ ...base, softwareVersion: "2024", licenceType: "Subscription", licenceSeats: "10" });
+    expect(hw).toMatchObject({ softwareVersion: null, licenceType: null, licenceSeats: null });
   });
 
   it("rejects bad item types, HSN codes and negative numbers", () => {

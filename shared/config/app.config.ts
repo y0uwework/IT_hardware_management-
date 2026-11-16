@@ -12,6 +12,8 @@ export const appConfig = {
   priorities: ["Low", "Normal", "High", "Urgent"] as const,
   assetConditions: ["New", "Good", "Fair", "Poor", "Damaged"] as const,
   itemTypes: ["Hardware", "Accessory", "Consumable", "Spare Part", "Software"] as const,
+  // How a software item's licence is sold (only used when item_type = "Software").
+  licenceTypes: ["Perpetual", "Subscription", "OEM", "Free / Open source"] as const,
   unitsOfMeasure: ["Nos", "Set", "Pair", "Box", "Pack", "Metre", "Licence"] as const,
   // Largest CSV accepted by item bulk upload.
   itemBulkUploadMaxRows: 1000,

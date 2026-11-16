@@ -46,8 +46,29 @@ export const itemInputSchema = z.object({
   ),
   warrantyMonths: optionalInt(240, "Warranty months"),
   reorderLevel: optionalInt(1_000_000, "Reorder level"),
+  // Software only — cleared below for every other item type.
+  softwareVersion: optionalText(50),
+  licenceType: z.preprocess(
+    blankToNull,
+    z
+      .enum(appConfig.licenceTypes, { errorMap: () => ({ message: `One of: ${appConfig.licenceTypes.join(", ")}` }) })
+      .nullable()
+  ),
+  licenceSeats: z.preprocess(
+    blankToNull,
+    z.coerce
+      .number({ invalid_type_error: "Seats must be a number" })
+      .int("Seats must be a whole number")
+      .min(1, "At least 1 seat")
+      .max(1_000_000)
+      .nullable()
+  ),
   isActive: z.preprocess((v) => (v === undefined ? true : v), boolLike),
-});
+})
+  // Licence details make no sense on hardware, so they are stored as NULL for non-software items.
+  .transform((v) =>
+    v.itemType === "Software" ? v : { ...v, softwareVersion: null, licenceType: null, licenceSeats: null }
+  );
 
 export const itemListSchema = z.object({
   page: z.coerce.number().int().min(1).default(1),

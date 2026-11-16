@@ -22,6 +22,9 @@ interface FormValues {
   standardCost: string;
   warrantyMonths: string;
   reorderLevel: string;
+  softwareVersion: string;
+  licenceType: string;
+  licenceSeats: string;
   isActive: boolean;
 }
 
@@ -39,6 +42,9 @@ const blank = (): FormValues => ({
   standardCost: "",
   warrantyMonths: "",
   reorderLevel: "",
+  softwareVersion: "",
+  licenceType: "",
+  licenceSeats: "",
   isActive: true,
 });
 
@@ -56,6 +62,9 @@ const fromItem = (i: ItemRow): FormValues => ({
   standardCost: i.standardCost ?? "",
   warrantyMonths: i.warrantyMonths?.toString() ?? "",
   reorderLevel: i.reorderLevel?.toString() ?? "",
+  softwareVersion: i.softwareVersion ?? "",
+  licenceType: i.licenceType ?? "",
+  licenceSeats: i.licenceSeats?.toString() ?? "",
   isActive: i.isActive,
 });
 
@@ -186,7 +195,15 @@ export function ItemFormModal({
             label="Item type"
             required
             value={values.itemType}
-            onChange={(e) => set("itemType", e.target.value)}
+            onChange={(e) => {
+              const itemType = e.target.value;
+              // Licence details belong to software only; drop them when the type changes away from it.
+              setValues((s) => ({
+                ...s,
+                itemType,
+                ...(itemType === "Software" ? {} : { softwareVersion: "", licenceType: "", licenceSeats: "" }),
+              }));
+            }}
             options={appConfig.itemTypes.map((t) => ({ value: t, label: t }))}
             error={fieldErrors.itemType}
           />
@@ -244,6 +261,38 @@ export function ItemFormModal({
             error={fieldErrors.reorderLevel}
             helper="Stock level that should trigger re-ordering."
           />
+          {values.itemType === "Software" && (
+            <>
+              <div className="border-t border-neutral-200 pt-4 text-sm font-medium text-neutral-900 md:col-span-2">
+                Licence details
+              </div>
+              <Input
+                label="Version"
+                value={values.softwareVersion}
+                onChange={(e) => set("softwareVersion", e.target.value)}
+                error={fieldErrors.softwareVersion}
+                helper="e.g. 2024 or 16.0"
+                maxLength={50}
+              />
+              <Select
+                label="Licence type"
+                value={values.licenceType}
+                onChange={(e) => set("licenceType", e.target.value)}
+                placeholder="Not specified"
+                options={appConfig.licenceTypes.map((t) => ({ value: t, label: t }))}
+                error={fieldErrors.licenceType}
+              />
+              <Input
+                label="Seats / licences"
+                type="number"
+                min={1}
+                value={values.licenceSeats}
+                onChange={(e) => set("licenceSeats", e.target.value)}
+                error={fieldErrors.licenceSeats}
+                helper="How many users one licence line covers."
+              />
+            </>
+          )}
           <Textarea
             label="Description / default specification"
             wrapperClassName="md:col-span-2"
