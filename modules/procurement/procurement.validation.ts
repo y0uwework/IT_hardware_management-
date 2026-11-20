@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { appConfig } from "../../shared/config/app.config";
 import { blankToNull, id, listQuery, optDate, optInt, optText, price, qty, reqDate, taxRate } from "../../shared/validation";
 
 // ── Vendors ──
@@ -40,6 +41,18 @@ export const vendorSchema = z.object({
 export const requisitionSchema = z
   .object({
     title: z.string().trim().min(3, "Give the requisition a title").max(200),
+    // ── Header ──
+    requesterType: z.enum(appConfig.requesterTypes).default(appConfig.requesterTypes[0]),
+    requesterUserId: z.preprocess(blankToNull, id().nullable()),
+    requesterName: optText(200),
+    branch: optText(100),
+    notifyEmail: z.boolean().default(false),
+    emailAddress: z.preprocess(blankToNull, z.string().trim().email("Enter a valid email").max(255).nullable()),
+    series: optText(50),
+    validUntil: optDate,
+    documentDate: optDate,
+    itemServiceType: z.enum(["Item", "Service"]).default("Item"),
+    summaryType: optText(50),
     department: optText(100),
     costCentre: optText(100),
     requiredDate: optDate,
@@ -54,6 +67,15 @@ export const requisitionSchema = z
           quantity: qty,
           description: optText(1000),
           estimatedUnitPrice: z.preprocess(blankToNull, price.nullable()),
+          requiredDate: optDate,
+          vendorId: z.preprocess(blankToNull, id().nullable()),
+          quotedDate: optDate,
+          quotedPrice: z.preprocess(blankToNull, price.nullable()),
+          currency: optText(10),
+          uom: optText(20),
+          warehouseId: z.preprocess(blankToNull, id().nullable()),
+          taxCode: optText(20),
+          lineTotal: z.preprocess(blankToNull, price.nullable()),
         })
       )
       .max(100)

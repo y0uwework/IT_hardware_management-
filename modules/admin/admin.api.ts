@@ -128,7 +128,7 @@ export const masterDataWarehousesHandler = withApi({
 // /api/v1/users
 export const usersHandler = withApi({
   GET: {
-    permission: ["employee.view", "asset.assign", "admin.roles.manage"],
+    permission: ["employee.view", "asset.assign", "admin.roles.manage", "procurement.manage"],
     handler: async (req, res) => {
       const q = parse(userSearchSchema, req.query);
       const { items, total } = await searchUsers({ ...q, activeOnly: q.activeOnly === "true" });

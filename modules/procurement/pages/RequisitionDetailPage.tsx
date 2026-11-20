@@ -21,6 +21,17 @@ interface Detail {
   prNumber: string;
   title: string;
   status: string;
+  requesterType: string | null;
+  requesterName: string | null;
+  branch: string | null;
+  notifyEmail: boolean;
+  emailAddress: string | null;
+  series: string | null;
+  postingDate: string | null;
+  validUntil: string | null;
+  documentDate: string | null;
+  itemServiceType: string | null;
+  summaryType: string | null;
   department: string | null;
   costCentre: string | null;
   requiredDate: string | null;
@@ -32,8 +43,17 @@ interface Detail {
     description: string;
     quantity: number;
     estimatedUnitPrice: string | null;
+    requiredDate: string | null;
+    quotedDate: string | null;
+    quotedPrice: string | null;
+    currency: string | null;
+    uom: string | null;
+    taxCode: string | null;
+    lineTotal: string | null;
     category: { name: string };
     item: { code: string; name: string } | null;
+    vendor: { name: string } | null;
+    warehouse: { name: string } | null;
     request: { id: number; requestNumber: string; requesterName: string } | null;
   }[];
   quotations: {
@@ -169,9 +189,17 @@ export default function RequisitionDetailPage({ user, forbidden }: ProtectedPage
             <InfoGrid
               cols={4}
               items={[
+                ["Requester", pr.requesterName ? `${pr.requesterName}${pr.requesterType ? ` (${pr.requesterType})` : ""}` : "—"],
+                ["Branch", pr.branch],
                 ["Department", pr.department],
+                ["Series", pr.series],
+                ["Item/Service Type", pr.itemServiceType],
+                ["Summary Type", pr.summaryType],
+                ["Posting Date", formatDate(pr.postingDate)],
+                ["Valid Until", formatDate(pr.validUntil)],
+                ["Document Date", formatDate(pr.documentDate)],
+                ["Required Date", formatDate(pr.requiredDate)],
                 ["Cost centre", pr.costCentre],
-                ["Needed by", formatDate(pr.requiredDate)],
                 ["Raised", `${formatDate(pr.createdAt)} by ${pr.createdBy.fullName}`],
               ]}
             />
@@ -280,7 +308,20 @@ export default function RequisitionDetailPage({ user, forbidden }: ProtectedPage
                         {it.request.requestNumber} · {it.request.requesterName}
                       </Link>
                     )}
-                    Est. {formatMoney(it.estimatedUnitPrice)} each
+                    <span className="block">Info {formatMoney(it.estimatedUnitPrice)} each</span>
+                    {it.vendor && (
+                      <span className="block">
+                        {it.vendor.name} · quoted {formatMoney(it.quotedPrice)}
+                        {it.currency ? ` ${it.currency}` : ""}
+                      </span>
+                    )}
+                    {(it.lineTotal || it.uom || it.warehouse) && (
+                      <span className="block">
+                        {it.quantity} {it.uom ?? "units"}
+                        {it.warehouse ? ` · ${it.warehouse.name}` : ""}
+                        {it.lineTotal ? ` · total ${formatMoney(it.lineTotal)}` : ""}
+                      </span>
+                    )}
                   </span>
                 </li>
               ))}

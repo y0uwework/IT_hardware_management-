@@ -32,6 +32,15 @@ export const appConfig = {
   fiscalYearStartMonth: 4,
   // GST / tax rates offered on PO, quotation and invoice lines (%).
   taxRates: [0, 5, 12, 18, 28] as const,
+  // Office locations offered on a purchase request.
+  branches: ["Head Office", "Branch Office", "Branch IT Store"] as const,
+  // Requester types offered on a purchase request.
+  requesterTypes: ["HR", "IT", "Store"] as const,
+  // Numbering series and the currencies a request line can quote in.
+  requisitionSeries: ["PR", "PR-SERVICE"] as const,
+  currencies: ["INR", "USD", "EUR", "GBP"] as const,
+  // Summary grouping shown on a purchase request (Contents tab).
+  purchaseSummaryTypes: ["Material", "Service", "Capital", "Expense"] as const,
   paymentModes: ["NEFT", "RTGS", "IMPS", "UPI", "Cheque", "Card", "Cash"] as const,
   // Invoice line may differ from the PO price by at most this much before it is a discrepancy.
   invoicePriceTolerance: 0.01,

@@ -182,7 +182,23 @@ export async function pendingProcurementLines(tx?: Tx, ids?: number[]) {
 
 export async function createRequisition(actor: AuthUser, input: RequisitionInput, correlationId?: string) {
   return withTransaction(async (tx) => {
-    const lines: { requestItemId: number | null; itemId: number | null; categoryId: number; description: string; quantity: number; estimatedUnitPrice: number | null }[] = [];
+    const lines: {
+      requestItemId: number | null;
+      itemId: number | null;
+      categoryId: number;
+      description: string;
+      quantity: number;
+      estimatedUnitPrice: number | null;
+      requiredDate: Date | null;
+      vendorId: number | null;
+      quotedDate: Date | null;
+      quotedPrice: number | null;
+      currency: string | null;
+      uom: string | null;
+      warehouseId: number | null;
+      taxCode: string | null;
+      lineTotal: number | null;
+    }[] = [];
 
     if (input.requestItemIds.length) {
       const pending = await pendingProcurementLines(tx, input.requestItemIds);
@@ -196,6 +212,15 @@ export async function createRequisition(actor: AuthUser, input: RequisitionInput
           description: `${p.itemName ?? p.categoryName} — ${p.specification}`.slice(0, 1000),
           quantity: p.outstanding,
           estimatedUnitPrice: p.estimatedUnitPrice ? Number(p.estimatedUnitPrice) : null,
+          requiredDate: toDate(input.requiredDate),
+          vendorId: null,
+          quotedDate: null,
+          quotedPrice: null,
+          currency: null,
+          uom: null,
+          warehouseId: null,
+          taxCode: null,
+          lineTotal: null,
         });
       }
       if (!input.department) {
@@ -226,18 +251,44 @@ export async function createRequisition(actor: AuthUser, input: RequisitionInput
           description: l.description ?? (it.description ? `${it.name} — ${it.description}` : it.name).slice(0, 1000),
           quantity: l.quantity,
           estimatedUnitPrice: l.estimatedUnitPrice ?? (it.standardCost ? Number(it.standardCost) : null),
+          requiredDate: toDate(l.requiredDate),
+          vendorId: l.vendorId,
+          quotedDate: toDate(l.quotedDate),
+          quotedPrice: l.quotedPrice,
+          currency: l.currency,
+          uom: l.uom,
+          warehouseId: l.warehouseId,
+          taxCode: l.taxCode,
+          lineTotal: l.lineTotal ?? (l.quotedPrice != null ? l.quotedPrice * l.quantity : null),
         });
       });
     }
 
     const pr = (await queryOne<{ id: number }>(
       tx,
-      `INSERT INTO dbo.purchase_requisitions (pr_number, title, status, department, cost_centre, required_date, notes, created_by_user_id)
-       OUTPUT INSERTED.id VALUES (@tmp, @title, @status, @department, @costCentre, @requiredDate, @notes, @actor)`,
+      `INSERT INTO dbo.purchase_requisitions (pr_number, title, status, requester_type, requester_user_id, requester_name, branch,
+         notify_email, email_address, series, posting_date, valid_until, document_date, item_service_type, summary_type,
+         department, cost_centre, required_date, notes, created_by_user_id)
+       OUTPUT INSERTED.id
+       VALUES (@tmp, @title, @status, @requesterType, @requesterUserId, @requesterName, @branch, @notifyEmail, @emailAddress,
+         @series, @postingDate, @validUntil, @documentDate, @itemServiceType, @summaryType, @department, @costCentre,
+         @requiredDate, @notes, @actor)`,
       {
         tmp: tmpNumber(),
         title: input.title,
         status: PR_STATUS.OPEN,
+        requesterType: input.requesterType,
+        requesterUserId: input.requesterUserId,
+        requesterName: input.requesterName ?? actor.fullName,
+        branch: input.branch,
+        notifyEmail: false,
+        emailAddress: null,
+        series: input.series,
+        postingDate: new Date(),
+        validUntil: toDate(input.validUntil),
+        documentDate: toDate(input.documentDate),
+        itemServiceType: input.itemServiceType,
+        summaryType: input.summaryType,
         department: input.department,
         costCentre: input.costCentre,
         requiredDate: toDate(input.requiredDate),
@@ -249,8 +300,11 @@ export async function createRequisition(actor: AuthUser, input: RequisitionInput
     for (const l of lines) {
       await execute(
         tx,
-        `INSERT INTO dbo.purchase_requisition_items (requisition_id, request_item_id, item_id, category_id, description, quantity, estimated_unit_price)
-         VALUES (@prId, @requestItemId, @itemId, @categoryId, @description, @quantity, @estimatedUnitPrice)`,
+        `INSERT INTO dbo.purchase_requisition_items (requisition_id, request_item_id, item_id, category_id, description, quantity,
+           estimated_unit_price, required_date, vendor_id, quoted_date, quoted_price, currency, unit_of_measure, warehouse_id,
+           tax_code, line_total)
+         VALUES (@prId, @requestItemId, @itemId, @categoryId, @description, @quantity, @estimatedUnitPrice, @requiredDate,
+           @vendorId, @quotedDate, @quotedPrice, @currency, @uom, @warehouseId, @taxCode, @lineTotal)`,
         { prId: pr.id, ...l }
       );
     }
@@ -259,8 +313,12 @@ export async function createRequisition(actor: AuthUser, input: RequisitionInput
   });
 }
 
-const PR_COLS = `pr.id, pr.pr_number AS prNumber, pr.title, pr.status, pr.department, pr.cost_centre AS costCentre,
-  pr.required_date AS requiredDate, pr.notes, pr.created_at AS createdAt, cb.full_name AS [createdBy.fullName]`;
+const PR_COLS = `pr.id, pr.pr_number AS prNumber, pr.title, pr.status, pr.requester_type AS requesterType,
+  pr.requester_user_id AS requesterUserId, pr.requester_name AS requesterName, pr.branch, pr.notify_email AS notifyEmail,
+  pr.email_address AS emailAddress, pr.series, pr.posting_date AS postingDate, pr.valid_until AS validUntil,
+  pr.document_date AS documentDate, pr.item_service_type AS itemServiceType, pr.summary_type AS summaryType,
+  pr.department, pr.cost_centre AS costCentre, pr.required_date AS requiredDate, pr.notes, pr.created_at AS createdAt,
+  cb.full_name AS [createdBy.fullName]`;
 
 export async function listRequisitions(q: ListQuery) {
   const where = new Where();
@@ -287,11 +345,17 @@ export async function getRequisition(prId: number) {
 
      SELECT x.id, x.request_item_id AS requestItemId, x.item_id AS itemId, x.description, x.quantity,
             CONVERT(NVARCHAR(40), x.estimated_unit_price) AS estimatedUnitPrice,
+            x.required_date AS requiredDate, x.vendor_id AS vendorId, x.quoted_date AS quotedDate,
+            CONVERT(NVARCHAR(40), x.quoted_price) AS quotedPrice, x.currency, x.unit_of_measure AS uom,
+            x.warehouse_id AS warehouseId, x.tax_code AS taxCode, CONVERT(NVARCHAR(40), x.line_total) AS lineTotal,
             c.name AS [category.name], im.item_code AS [item.code], im.item_name AS [item.name],
+            v.name AS [vendor.name], w.name AS [warehouse.name],
             r.id AS [request.id], r.request_number AS [request.requestNumber], u.full_name AS [request.requesterName]
      FROM dbo.purchase_requisition_items x
      JOIN dbo.hardware_categories c ON c.id = x.category_id
      LEFT JOIN dbo.item_master im ON im.id = x.item_id
+     LEFT JOIN dbo.vendors v ON v.id = x.vendor_id
+     LEFT JOIN dbo.warehouses w ON w.id = x.warehouse_id
      LEFT JOIN dbo.hardware_request_items ri ON ri.id = x.request_item_id
      LEFT JOIN dbo.hardware_requests r ON r.id = ri.hardware_request_id
      LEFT JOIN dbo.users u ON u.id = r.requester_user_id
